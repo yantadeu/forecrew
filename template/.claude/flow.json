@@ -1,0 +1,34 @@
+{
+  "work_dir": ".work",
+  "learnings": ".claude/LEARNINGS.md",
+  "product_sources": ".claude/product-sources.md",
+  "max_fix_rounds": 3,
+  "checks": [],
+  "ship": {"enabled": false, "tool": "auto", "push": true, "draft": true, "command": ""},
+  "language": "en",
+  "sensitive_ignored": [],
+  "stages": {
+    "refiner": {"file": "01-contract.md", "status": true, "covers": "How it is proven", "requires": [], "sections": ["The request in one sentence", "How it is proven", "What stays out", "Where it touches", "What can fail silently", "Sources read"]},
+    "executor": {"file": "02-change.md", "status": true, "requires": ["refiner"], "sections": ["What changed", "Build and tests", "Not covered by the contract"]},
+    "tester": {"file": "03-proof.md", "status": true, "covers": "Tests", "requires": ["refiner", "executor"], "sections": ["Tests", "Bite proof", "Layers and coverage"]},
+    "reviewer": {"file": "04-review-contract.md", "verdict": true, "requires": ["refiner", "executor", "tester"], "sections": ["Findings"]},
+    "security-reviewer": {"file": "04-review-security.md", "verdict": true, "requires": ["refiner", "executor", "tester"], "sections": ["Findings"]},
+    "qa-reviewer": {"file": "04-review-qa.md", "verdict": true, "requires": ["refiner", "executor", "tester"], "sections": ["Findings"]},
+    "product-reviewer": {"file": "04-review-product.md", "verdict": true, "requires": ["refiner", "executor", "tester"], "sections": ["Sources compared", "Findings"]},
+    "retrospective": {"file": "05-retro.md", "requires": [], "sections": ["What went wrong", "Proposed learnings"]}
+  },
+  "lenses": {
+    "contract": {"tags": ["workflow", "data", "integration", "tooling", "process"], "read": []},
+    "security": {"tags": ["security"], "read": []},
+    "qa": {"tags": ["qa"], "read": []},
+    "product": {"tags": ["product", "integration"], "read": [".claude/product-sources.md"]}
+  },
+  "rooms": [
+    {"id": "refine", "name": {"en": "Drafting room", "pt": "Sala de projeto"}, "agents": ["refiner"]},
+    {"id": "workshop", "name": {"en": "Building site", "pt": "Canteiro de obras"}, "agents": ["executor", "tester"]},
+    {"id": "review", "name": {"en": "Inspection", "pt": "Vistoria"}, "agents": ["reviewer", "security-reviewer", "qa-reviewer", "product-reviewer"]},
+    {"id": "decision", "name": {"en": "Site office", "pt": "Barracão da obra"}, "agents": ["main", "retrospective"]}
+  ],
+  "agents": {},
+  "extensions": {}
+}

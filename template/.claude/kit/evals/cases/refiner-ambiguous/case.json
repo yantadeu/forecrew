@@ -1,0 +1,10 @@
+{
+  "id": "EVAL-1",
+  "agent": "refiner",
+  "prompt": "Work dir .work/EVAL-1. Write the contract.",
+  "checks": [
+    {"gate": "refiner"},
+    {"file": "01-contract.md", "re": "\\[NEEDS CLARIFICATION", "why": "export format and the time zone of 'the month' are open choices"},
+    {"file": "01-contract.md", "section": "What can fail silently", "re": "zone|UTC|boundary|month", "why": "transactions near midnight on the last day fall in the wrong month"}
+  ]
+}

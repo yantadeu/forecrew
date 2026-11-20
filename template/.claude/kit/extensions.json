@@ -1,0 +1,244 @@
+{
+  "about": "Optional plugins and MCP servers that /flow-setup extensions can offer. Checked on 2026-11-16 against the Claude Code plugin catalog. Commands change: /flow-setup re-checks each one (claude plugin details, the source repository) before installing. Nothing here is installed without the dev's ok.",
+  "extensions": [
+    {
+      "id": "playwright",
+      "kind": "mcp",
+      "author": "Microsoft",
+      "trust": "official marketplace",
+      "helps": [
+        "tester",
+        "qa-reviewer"
+      ],
+      "signal": "a web frontend or an HTTP UI in the repository",
+      "why": "Drives a real browser: end-to-end tests, screenshots, checking a UI change actually renders.",
+      "claude": [
+        "claude plugin install playwright@claude-plugins-official --scope project"
+      ],
+      "mcp": {
+        "command": [
+          "npx",
+          "@playwright/mcp@latest"
+        ]
+      }
+    },
+    {
+      "id": "context7",
+      "kind": "mcp",
+      "author": "Upstash",
+      "trust": "official marketplace",
+      "helps": [
+        "refiner",
+        "executor"
+      ],
+      "signal": "third-party libraries or frameworks whose APIs change between versions",
+      "why": "Fetches version-specific library documentation, so the executor does not code against an API from memory.",
+      "claude": [
+        "claude plugin install context7@claude-plugins-official --scope project"
+      ],
+      "mcp": {
+        "url": "https://mcp.context7.com/mcp"
+      }
+    },
+    {
+      "id": "github",
+      "kind": "mcp",
+      "author": "GitHub",
+      "trust": "official marketplace",
+      "helps": [
+        "tracker",
+        "product-reviewer"
+      ],
+      "signal": "tasks in GitHub Issues, or reviews on GitHub pull requests",
+      "why": "Lets agents read issues and pull requests. The gh CLI is an alternative with no install.",
+      "claude": [
+        "claude plugin install github@claude-plugins-official --scope project"
+      ]
+    },
+    {
+      "id": "gitlab",
+      "kind": "mcp",
+      "author": "GitLab",
+      "trust": "official marketplace",
+      "helps": [
+        "tracker",
+        "product-reviewer"
+      ],
+      "signal": "tasks in GitLab Issues, or merge requests on GitLab",
+      "why": "Lets agents read issues and merge requests. The glab CLI is an alternative with no install.",
+      "claude": [
+        "claude plugin install gitlab@claude-plugins-official --scope project"
+      ]
+    },
+    {
+      "id": "linear",
+      "kind": "mcp",
+      "author": "Linear",
+      "trust": "official marketplace",
+      "helps": [
+        "tracker"
+      ],
+      "signal": "tasks in Linear",
+      "why": "Lets agents read Linear issues and their acceptance criteria.",
+      "claude": [
+        "claude plugin install linear@claude-plugins-official --scope project"
+      ]
+    },
+    {
+      "id": "asana",
+      "kind": "mcp",
+      "author": "Asana",
+      "trust": "official marketplace",
+      "helps": [
+        "tracker"
+      ],
+      "signal": "tasks in Asana",
+      "why": "Lets agents read Asana tasks.",
+      "claude": [
+        "claude plugin install asana@claude-plugins-official --scope project"
+      ]
+    },
+    {
+      "id": "atlassian",
+      "kind": "mcp",
+      "author": "Atlassian",
+      "trust": "vendor remote server",
+      "helps": [
+        "tracker",
+        "product-reviewer"
+      ],
+      "signal": "tasks in Jira, or product documentation in Confluence",
+      "why": "Lets agents read Jira issues and Confluence pages. Each dev authorizes with their own Atlassian login.",
+      "claude": [
+        "claude mcp add --transport http atlassian https://mcp.atlassian.com/v2/mcp --scope project"
+      ],
+      "mcp": {
+        "url": "https://mcp.atlassian.com/v2/mcp"
+      }
+    },
+    {
+      "id": "security-guidance",
+      "kind": "claude-plugin",
+      "author": "Anthropic",
+      "trust": "official marketplace",
+      "helps": [
+        "executor",
+        "security-reviewer"
+      ],
+      "signal": "any repository handling user data, credentials or external input",
+      "why": "Warns on risky patterns while code is being written, before the security lens sees it.",
+      "claude": [
+        "claude plugin install security-guidance@claude-plugins-official --scope project"
+      ]
+    },
+    {
+      "id": "pr-review-toolkit",
+      "kind": "claude-plugin",
+      "author": "Anthropic",
+      "trust": "official marketplace",
+      "helps": [
+        "reviewer",
+        "qa-reviewer"
+      ],
+      "signal": "work reviewed as pull requests",
+      "why": "Review agents for error handling, test coverage, comments and type design. Useful on a PR that did not go through the flow.",
+      "claude": [
+        "claude plugin install pr-review-toolkit@claude-plugins-official --scope project"
+      ]
+    },
+    {
+      "id": "lsp",
+      "kind": "claude-plugin",
+      "author": "Anthropic",
+      "trust": "official marketplace",
+      "helps": [
+        "executor",
+        "reviewer"
+      ],
+      "signal": "the repository's main language: typescript-lsp, pyright-lsp, gopls-lsp, rust-analyzer-lsp, jdtls-lsp, kotlin-lsp, csharp-lsp, ruby-lsp, php-lsp, swift-lsp, clangd-lsp, lua-lsp",
+      "why": "Go-to-definition and diagnostics from a language server instead of text search.",
+      "claude": [
+        "claude plugin install <language>-lsp@claude-plugins-official --scope project"
+      ]
+    },
+    {
+      "id": "frontend-design",
+      "kind": "claude-plugin",
+      "author": "Anthropic",
+      "trust": "official marketplace",
+      "helps": [
+        "executor"
+      ],
+      "signal": "UI work",
+      "why": "Design guidance for interfaces the executor builds.",
+      "claude": [
+        "claude plugin install frontend-design@claude-plugins-official --scope project"
+      ]
+    },
+    {
+      "id": "mattpocock-skills",
+      "kind": "claude-plugin",
+      "author": "Matt Pocock",
+      "trust": "community, listed in the official marketplace",
+      "helps": [
+        "triage",
+        "refiner",
+        "tester"
+      ],
+      "signal": "the team wants a harder interview before code",
+      "why": "Includes grill-me and grilling (relentless questioning of a plan), tdd, to-spec, diagnosing-bugs and domain-modeling.",
+      "overlaps": "Its spec and ticket skills overlap the refiner. Use grill-me inside the triage, and keep the contract in 01-contract.md.",
+      "claude": [
+        "claude plugin install mattpocock-skills@claude-plugins-official --scope project"
+      ]
+    },
+    {
+      "id": "superpowers",
+      "kind": "claude-plugin",
+      "author": "Jesse Vincent",
+      "trust": "community, listed in the official marketplace",
+      "helps": [
+        "tester",
+        "executor"
+      ],
+      "signal": "the team wants red/green TDD and systematic debugging habits",
+      "why": "Skills for TDD, systematic debugging and brainstorming.",
+      "overlaps": "It has its own subagent-driven development flow. Running both makes two orchestrators compete: use its TDD and debugging skills, not its flow.",
+      "claude": [
+        "claude plugin install superpowers@claude-plugins-official --scope project"
+      ]
+    },
+    {
+      "id": "ponytail",
+      "kind": "claude-plugin",
+      "author": "DietrichGebert",
+      "trust": "community, own marketplace",
+      "helps": [
+        "executor",
+        "reviewer"
+      ],
+      "signal": "the codebase tends to grow abstractions nobody asked for",
+      "why": "Pushes the executor to the smallest change that works. ponytail-review adds an over-engineering pass to the review.",
+      "claude": [
+        "claude plugin marketplace add DietrichGebert/ponytail --scope project",
+        "claude plugin install ponytail@ponytail --scope project"
+      ]
+    },
+    {
+      "id": "claude-mem",
+      "kind": "claude-plugin",
+      "author": "thedotmack",
+      "trust": "community, own marketplace",
+      "helps": [
+        "all stages"
+      ],
+      "signal": "a dev wants automatic memory across their own sessions",
+      "why": "Captures observations from sessions and injects relevant ones at the start of the next.",
+      "overlaps": "It is personal and automatic. LEARNINGS.md is shared, reviewed and tagged. Keep team rules in LEARNINGS.md. It records session content locally, so check it against your sensitive-data rules first. Recommend user scope, not project.",
+      "claude": [
+        "claude plugin marketplace add thedotmack/claude-mem",
+        "claude plugin install claude-mem@thedotmack --scope user"
+      ]
+    }
+  ]
+}

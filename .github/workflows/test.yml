@@ -1,0 +1,41 @@
+name: test
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 template/.claude/kit/test_kit.py
+      - run: python3 template/.claude/kit/test_page.py
+      - run: shellcheck install.sh template/.claude/kit/scripts/work.sh
+      - name: Install into an empty repository
+        run: mkdir /tmp/demo && git -C /tmp/demo init -q && ./install.sh /tmp/demo
+      - name: A second install changes nothing
+        run: |
+          ./install.sh /tmp/demo | tee /tmp/second.txt
+          ! grep -E '^(added|wrote) ' /tmp/second.txt
+      - name: Cursor and Codex projections match the sources
+        run: CLAUDE_PROJECT_DIR=/tmp/demo python3 /tmp/demo/.claude/kit/scripts/export.py --check
+      - name: Existing AI configuration is detected, kept by default, backed up on --replace
+        run: |
+          mkdir /tmp/old && cd /tmp/old && git init -q
+          mkdir -p .claude/agents && echo "# mine" > .claude/agents/reviewer.md
+          echo "rules" > .cursorrules && echo "# project" > CLAUDE.md
+          "$GITHUB_WORKSPACE/install.sh" /tmp/old | tee /tmp/out.txt
+          grep -E '^  conflict +\.claude/agents/reviewer\.md' /tmp/out.txt
+          grep -E '^  overlap +\.cursorrules' /tmp/out.txt
+          grep -E '^  overlap +CLAUDE\.md' /tmp/out.txt
+          ! grep -E '^  (conflict|overlap) +\.claude/agents/(tester|qa-reviewer)\.md' /tmp/out.txt
+          grep -qx '# mine' .claude/agents/reviewer.md
+          "$GITHUB_WORKSPACE/install.sh" /tmp/old --replace | grep '^replaced .claude/agents/reviewer.md'
+          grep -rqx '# mine' .agent-flow-backup
+          ! grep -qx '# mine' .claude/agents/reviewer.md
+  page-browser:
+    # The dashboard in a real browser: what test_page.py reads as text, clicked and counted.
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright/python:v1.65.2-noble
+    steps:
+      - uses: actions/checkout@v4
+      - run: command -v git >/dev/null || (apt-get update -qq && apt-get install -y -qq --no-install-recommends git >/dev/null)
+      - run: python3 -c "import playwright" 2>/dev/null || python3 -m pip install -q --break-system-packages playwright==1.65.2
+      - run: python3 template/.claude/kit/test_page_browser.py
