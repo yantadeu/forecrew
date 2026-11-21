@@ -201,7 +201,7 @@ def work_dir(wt):
 def read(path, limit=200_000):
     try:
         with open(path, errors="replace") as f:
-            return f.read(limit)
+            return f.read() if limit is None else f.read(limit)
     except OSError:
         return None
 
@@ -2147,7 +2147,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         url = urllib.parse.urlparse(self.path)
         q = urllib.parse.parse_qs(url.query)
         if url.path in ("/", "/index.html"):
-            page = read(os.path.join(KIT, "dashboard", "index.html")) or ""
+            page = read(os.path.join(KIT, "dashboard", "index.html"), limit=None) or ""
             return self.send(200, page.replace("__KIT_TOKEN__", self.token or ""), "text/html; charset=utf-8")
         if url.path == "/api/events":
             # The stream holds a thread and one of MAX_STREAMS slots: only the page (its token,
