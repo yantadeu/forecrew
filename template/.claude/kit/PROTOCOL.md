@@ -14,6 +14,8 @@ orchestrator only carries paths and one-line statuses.
   01-contract.md            refiner
   02-change.md              executor
   03-proof.md               tester
+  evidence/                 tester (and any stage): screenshots cited as ![caption](evidence/<name>),
+                            shown as a gallery on the dashboard; never a secret or real personal data
   review.diff               work.sh review-package: the one diff every reviewer reads
   checks.md                 work.sh checks (review-package runs it): the project's lint, build and
                             test commands run by the machine, with a fingerprint of the tree
@@ -24,7 +26,8 @@ orchestrator only carries paths and one-line statuses.
   branch                    `work.sh init`: the branch the task started on, its PR/MR lookup's
   mr.json                   the first PR/MR found open or merged, kept so done survives a branch switch
 .work/current               the ID being worked on (the gates read it)
-.work/events.jsonl          what every agent did, for the dashboard
+.work/events.jsonl          what every agent did, for the dashboard; a stop carries the tokens the
+                            subagent spent, a tool call of the main session its session id
 ```
 
 Parallel tasks run one per worktree, since `current` is per checkout. The dashboard

@@ -28,6 +28,10 @@ Read what `.claude/kit/PROTOCOL.md` lists for reviewers, with lens `qa`.
 - **Zero and empty.** A wait or a loop whose expected count can be zero is tested at zero,
   and the test decides whether zero is success or error.
 - **Weak assertions.** "Not X" where the exact value is known; a count checked as "> 0".
+- **Seen, not described.** A criterion about what the user sees, in a project with a browser
+  or screenshot tool, has a screenshot under `evidence/` cited in the proof. Only a description
+  is a `minor` finding routed to the tester. Look at the images: one that does not show what
+  its caption says is a finding.
 - **Layer.** A test that touches infra carries the right build tag; no test skips; the proof
   ran in the layer where the test lives, and says which job proves it in CI.
 

@@ -1,24 +1,101 @@
 <p align="center"><img src="assets/forecrew-wordmark.svg" alt="Forecrew" width="420"></p>
 
-# Forecrew
+<h1 align="center">Forecrew</h1>
 
-**Mission control for coding agents.** Forecrew is a set of agents, commands, scripts and one hook that you install into a repository so coding
-agents (Claude Code, Cursor, Codex, GitHub Copilot) work on a task in stages: specify,
-implement, test, review, learn. Each stage writes its result to a file, and scripts check those
-files before the next stage may start. Four reviewers check the result from different angles:
-the contract, security, QA and product. A local dashboard shows every task as a tree of steps
-and as a pixel-art construction site where you walk among the agents, workers in hard hats;
-whatever needs you raises its hand, and you answer it on the page or in the chat with the session.
+<p align="center"><b>Mission control for coding agents.</b><br>
+A crew of specialized agents that turns a request into reviewed, proven, mergeable work,<br>
+in stages you can see, with gates that hold, and a dashboard where whatever needs you raises its hand.</p>
 
-<p align="center"><img src="assets/screenshots/site.jpg" alt="The Forecrew dashboard: a pixel-art virtual office where the four reviewers work in the inspection room, your avatar in the hall, the crew panel beside the map and the chat with the main session under it" width="900"></p>
-<p align="center"><sub>The site during a review: the four reviewers at work in the inspection room, the foreman with them, and the chat with the main session stays open under the map. Stills below, in <a href="#the-dashboard">The dashboard</a>.</sub></p>
+<p align="center">
+<a href="#quick-start">Quick start</a> ·
+<a href="#a-tour-in-gifs">Tour</a> ·
+<a href="#where-it-runs">Where it runs</a> ·
+<a href="#how-a-task-runs">How a task runs</a> ·
+<a href="#what-you-can-do-with-it">Features</a> ·
+<a href="#add-it-to-your-repository">Install</a> ·
+<a href="#commands">Commands</a> ·
+<a href="#configuration">Configuration</a>
+</p>
 
+<p align="center"><img src="assets/gifs/site.gif" alt="The dashboard's site: the simulation plays a task, the refiner walks to its desk, the foreman hands it the task, the crew panel lists who works where" width="900"></p>
 
-It does not depend on a task tracker or a documentation tool, and works without either: you
-can describe what you want in plain words. If you use a tracker, you tell it which one during
-setup.
+## Why Forecrew
+
+A coding agent alone is fast, and it forgets. The purpose lives in a conversation that gets
+summarized; "done" means the agent says so; the same context that wrote the code reviews it;
+and you find out what it decided without you when it is too late. Forecrew is a set of agents,
+commands, scripts and one hook that you install into a repository so the agents you already use
+(Claude Code, Cursor, Codex, GitHub Copilot) work on a task in stages:
+
+| The problem | What Forecrew does |
+| --- | --- |
+| The purpose gets lost when the conversation is summarized | It lives on disk, in `.work/<ID>/00-purpose.md`, with numbered criteria (`AC-001`...) every stage cites |
+| The agent guesses where a choice is open | It writes `[NEEDS CLARIFICATION]` and asks you, one question at a time; nothing is built on a guess |
+| "Tests pass" | The tester reverts the fix and shows each test failing without it; the machine runs lint, build and tests before any reviewer |
+| One context checks its own work | Four reviewers in parallel, each with a clean context and its own lens: contract, security, QA, product (and the specialists you hire) |
+| Decisions you never saw | Every ruling taken without you is in a ledger, with its cost if wrong |
+| "Done" | Done means a pull or merge request exists, or you closed it yourself |
+| You babysit terminals | One page shows every task of every worktree; whatever needs you raises its hand, and you answer there, in the terminal, or from your phone |
+
+It needs no task tracker or documentation tool: you can describe what you want in plain words.
+If you use one, you tell it which during setup.
+
+## Quick start
+
+```bash
+git clone https://github.com/yantadeu/forecrew.git
+./forecrew/install.sh /path/to/your/repo        # Claude Code, Cursor and Codex
+cd /path/to/your/repo && claude                  # then, inside the session:
+/flow-setup                                      # a short interview: tracker, docs, stack
+/task add CSV export to the report page          # your first task
+```
+
+`/task` offers to open the dashboard. The full guide is in [Add it to your repository](#add-it-to-your-repository).
+
+## A tour in GIFs
+
+<table>
+<tr>
+<td width="50%"><img src="assets/gifs/handoff.gif" alt="A stage lands while the page is open: a toast says the executor handed over 02-change.md, with its first line; See in Steps scrolls to the step, which flashes"><br><sub><b>Hand-offs you notice.</b> When a stage lands, a toast says who handed over what, with its first line. "See in Steps" takes you to it. Every step of the tree carries a two-line digest and the criteria it cites (<code>AC 3/3 cited</code>).</sub></td>
+<td width="50%"><img src="assets/gifs/evidence.gif" alt="The proof's screenshots under the step, opened in a lightbox and paged with the arrow keys"><br><sub><b>Proof you can see.</b> The tester saves screenshots of each visual criterion under <code>evidence/</code> and cites them in the proof. They show as a gallery under the step; click for the lightbox, arrows to page.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="assets/gifs/costs.gif" alt="The task's tokens and cost per agent, then the Costs tab with every task compared and where the tokens go"><br><sub><b>What each task costs.</b> Tokens and API-equivalent cost per agent, the cache hit rate, and on the Costs tab every task compared and where the money goes across all of them.</sub></td>
+<td width="50%"><img src="assets/gifs/fork.gif" alt="The parallel task popover: typing an ID and a base branch builds the whole command to create the worktree and open a session there"><br><sub><b>Parallel fronts.</b> <code>work.sh fork</code> opens a new worktree on its own branch for a second session: a hotfix or a review while the main task goes on. The page writes the whole command as you type.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="assets/gifs/hire.gif" alt="The Crew panel's Hire a specialist cards: performance, accessibility, data migration and API compatibility reviewers, each with its command"><br><sub><b>Hire a specialist.</b> Ready reviewers (performance, accessibility, data migrations, API compatibility) join the crew with <code>/flow-agent add &lt;name&gt;</code>: a new lens in parallel, its own desk on the site.</sub></td>
+<td width="50%"><img src="assets/screenshots/now.jpg" alt="Waiting on you: the executor asks to run Bash, with Approve and Details, and the steps of the task under it"><br><sub><b>Needs you.</b> A question, a permission or the session's turn waits at the top, held for the page. You answer it there, in the terminal, or on Telegram.</sub></td>
+</tr>
+</table>
+
+## Where it runs
+
+Forecrew is **not another terminal or another app to live in**. It is a layer in your
+repository: agent definitions, commands, a hook and scripts under `.claude/`, plus a page in
+your browser. So it runs wherever your agents already run:
+
+- **Any terminal.** A plain shell, tmux or zellij panes, iTerm, Warp, Ghostty or WezTerm splits,
+  the terminal of VS Code or JetBrains. The hook and `work.sh` are bash and Python's standard
+  library.
+- **Next to other orchestrators.** Apps that lay out several agent terminals on a canvas or in
+  tabs host the sessions; Forecrew gives each of them the same process, gates and evidence.
+  Each terminal runs its own task in its own worktree, and one dashboard shows them all.
+- **Several agents and tools.** Claude Code runs the whole flow with live gates. Cursor, Codex
+  and Copilot get generated rules, agents and prompts, and `work.sh status` is the gate.
+- **Several fronts at once.** One task per worktree: `work.sh fork <ID>` creates one beside the
+  checkout, and the dashboard lists every worktree's tasks, sessions and alerts.
+- **Away from the desk.** The Telegram bridge brings what waits on you to your phone.
+
+Nothing leaves your machine except what you turn on (a forge lookup for PR status, Telegram),
+and nothing in it needs an account.
 
 ## What you can do with it
+
+Each group opens with a click. The short version is in the [tour](#a-tour-in-gifs).
+
+<details open>
+<summary><b>Plan before any code</b></summary>
 
 - **Start a task with or without a tracker.** `/task add CSV export to the report page` is
   enough: the agent proposes the acceptance criteria and a short ID for you to confirm. With a
@@ -34,13 +111,42 @@ setup.
   is recorded in the purpose, and the executor cannot start while a marker is open.
 - **Get a written contract before implementation.** It includes how each criterion is proven
   and a mandatory section on what can fail without anyone noticing.
+- **Register where product truth lives.** `/product-source <url|path>` reads the source, asks
+  you what it decides and which source wins when two disagree, and records it.
+  `/product-source sync` re-reads all of them.
+- **Catch product changes made during the task.** The refiner records the version of each
+  product source it read. The product reviewer re-reads them at the end and reports what
+  changed.
+
+</details>
+
+<details>
+<summary><b>Build and prove</b></summary>
+
 - **Get tests shown to fail without the fix.** The tester reverts the fix, shows the failure
   and restores it. A test that passes both ways does not count.
+- **Prove what users see.** For a criterion about a screen, the tester saves screenshots under
+  `.work/<ID>/evidence/` and cites each one in the proof (`![caption](evidence/<name>)`). The
+  QA reviewer looks at them, and the dashboard shows them as a gallery under the step, with a
+  lightbox. Images are shown as they are: the agents use test data, never real personal data.
 - **Get the machine's word before the reviewers'.** The project's own lint, build and test
   commands (`checks` in `flow.json`) run before any reviewer starts, and their output goes to
   `checks.md` for all four. A failing check, a tool that is not installed or a timeout sends the
   change back to the executor; a result is tied to the exact code it ran on, so an edit after
   the run means running them again. No reviewer is spent on a change that does not build.
+- **Block stages that are not ready.** In Claude Code, a hook refuses to launch a stage before
+  the ones it requires pass, and sends a stage back when its file is incomplete. In every tool,
+  `work.sh status` runs the same checks and shows what is next.
+- **Agents write in your language.** `language` in `flow.json` (asked by `/flow-setup`) is the
+  language you read: every session is told so at its start, and writes its messages, questions
+  and work files (purpose, contract, findings, rulings) in it. Only the keywords the scripts
+  read stay in English, and the page translates those.
+
+</details>
+
+<details>
+<summary><b>Review and decide</b></summary>
+
 - **Get four independent reviews in parallel.** Contract, security, QA and product, each with
   its own reading list, all reading the same diff, each finding routed to the stage that must
   fix it.
@@ -53,30 +159,30 @@ setup.
 - **Decide which findings get fixed.** When a reviewer passes with findings, you get one
   multiple-choice question listing them. The ones you check go back through the stages; the
   others are recorded as accepted, with the date. A later review reopens the decision.
+- **See every decision taken without you.** Agents record them in `ledger.md` as rulings: the
+  decision, why, and the cost if it is wrong.
 - **Know when a task is really done.** Four verdicts are not "done". The dashboard says
   `findings` until you decide them, `ready-for-mr` until a pull or merge request exists, and
   `done` once one is open or merged on GitHub or GitLab (with a link), git sees the branch
   merged, or you run `work.sh done` for work with no PR. Then the agent suggests `/clear` so
   the next task starts with a clean context.
-- **See every decision taken without you.** Agents record them in `ledger.md` as rulings: the
-  decision, why, and the cost if it is wrong.
 - **Learn between tasks.** A retrospective agent reads the finished task and proposes tagged
   learnings. You approve what goes into `LEARNINGS.md`, and each reviewer loads only its tags.
-- **Catch product changes made during the task.** The refiner records the version of each
-  product source it read. The product reviewer re-reads them at the end and reports what
-  changed.
-- **Register where product truth lives.** `/product-source <url|path>` reads the source, asks
-  you what it decides and which source wins when two disagree, and records it.
-  `/product-source sync` re-reads all of them.
-- **Block stages that are not ready.** In Claude Code, a hook refuses to launch a stage before
-  the ones it requires pass, and sends a stage back when its file is incomplete. In every tool,
-  `work.sh status` runs the same checks and shows what is next.
 - **Test the agents themselves.** Behavior evals run each agent on a fixture under pressure
   ("this is urgent, skip the edge cases") and check what it wrote.
+
+</details>
+
+<details>
+<summary><b>Watch and answer from the dashboard</b></summary>
+
 - **Know what to do right now.** The dashboard opens on one line: **NEEDS YOU** or **WAIT**. NEEDS YOU lists
   exactly what waits on you for the task, each with its answer right there: a question to
   answer, a permission to allow or deny, the session's turn to reply to, findings to fix or
   accept, a PR to open. WAIT says which agent works on what, so you know nothing is stuck.
+- **Read each stage at a glance.** Every step of the tree carries a two-line digest of what
+  its stage handed over and how many acceptance criteria it cites. When a stage lands while the
+  page is open, a toast says who handed over what, with "See in Steps".
 - **Answer everything from the page.** While the page is open, the hooks hold what the session
   waits for: a permission dialog (allow or deny, once you run `work.sh ui allow on`; off by
   default, the dialog stays in the terminal and the page only alerts), a question and the main
@@ -112,25 +218,6 @@ setup.
   It answers through the same checks as the page, reads only your chat, masks the command it
   shows (or hides it with `"telegram": {"details": false}`), and says when something was answered
   elsewhere.
-- **Clean up a finished task, memory included.** For a done task, the next session (or the
-  "clean up" button on the dashboard) offers the retrospective first, so the learnings survive,
-  then shows a plan of exactly what goes: the task's state, its worktree and local branch, and
-  a review of Claude's auto memory about the task, where you pick which entries are deleted.
-  Nothing goes before you confirm, a plan that changed meanwhile is refused, and a worktree with
-  uncommitted or unpushed work or a live session is never removed.
-- **Merge in the right order.** With several PRs or MRs open at once, `merge-order.py` says which
-  goes first and why: a branch cut from another merges after it, two branches that change the
-  same file merge in the order they started.
-- **Your own specialists, in their own room.** `/flow-agent` interviews you and creates a
-  specialized agent (a performance reviewer, an accessibility reviewer, a migration planner):
-  its role file, its place in the flow (an extra review lens in parallel, a stage in the
-  sequence, or a helper outside the flow), its room on the site (an existing one or a new
-  one) and its look on the dashboard. The next task runs it with no other change. Move or remove
-  it the same way.
-- **Agents write in your language.** `language` in `flow.json` (asked by `/flow-setup`) is the
-  language you read: every session is told so at its start, and writes its messages, questions
-  and work files (purpose, contract, findings, rulings) in it. Only the keywords the scripts
-  read stay in English, and the page translates those.
 - **Every word in your language.** The page is in English or Portuguese (the browser decides,
   a button switches), and that covers everything: statuses, agents, verdicts, events, the
   messages to type. A command to copy is always whole: `cd <worktree> && claude "<message>"`,
@@ -139,6 +226,53 @@ setup.
 - **A calm page.** A finding is decided after a confirmation that says what the choice does; an
   alert you have seen can be dismissed (and shown again); the theme is dark, light or your
   system's; the live dot says "connecting" until the event stream answers.
+
+</details>
+
+<details>
+<summary><b>Measure the cost</b></summary>
+
+- **Know what each task costs.** The hook records what each subagent spent when it finishes,
+  read from its own transcript; the main session's share comes from its transcript inside the
+  task's time window. The task shows tokens and API-equivalent cost per agent, the token mix
+  and the cache hit rate; the Costs tab compares every task and shows where the money goes.
+  List prices per model are built in and `pricing` in `flow.json` overrides them; on a
+  subscription it is what the same tokens would cost on the API.
+
+</details>
+
+<details>
+<summary><b>Work in parallel and finish clean</b></summary>
+
+- **Open a parallel front.** `work.sh fork <ID> [--from <ref>]` creates a worktree beside the
+  checkout, on a new branch, and prints the command that opens a session there: a hotfix, a
+  review of someone's branch, a second task. The dashboard lists it by itself, and cleaning up
+  its task removes it. The page's branch button writes the whole command as you type the ID.
+- **Merge in the right order.** With several PRs or MRs open at once, `merge-order.py` says which
+  goes first and why: a branch cut from another merges after it, two branches that change the
+  same file merge in the order they started.
+- **Clean up a finished task, memory included.** For a done task, the next session (or the
+  "clean up" button on the dashboard) offers the retrospective first, so the learnings survive,
+  then shows a plan of exactly what goes: the task's state, its worktree and local branch, and
+  a review of Claude's auto memory about the task, where you pick which entries are deleted.
+  Nothing goes before you confirm, a plan that changed meanwhile is refused, and a worktree with
+  uncommitted or unpushed work or a live session is never removed.
+
+</details>
+
+<details>
+<summary><b>Shape the crew</b></summary>
+
+- **Hire a ready specialist.** `/flow-agent catalog` lists reviewers that come with the kit
+  (performance, accessibility, data migrations, API compatibility), and
+  `/flow-agent add <name>` adds one as a lens in parallel, asking only what it should read in
+  your repository. The Crew panel shows the same catalog with the command to copy.
+- **Your own specialists, in their own room.** `/flow-agent` interviews you and creates a
+  specialized agent (a performance reviewer, an accessibility reviewer, a migration planner):
+  its role file, its place in the flow (an extra review lens in parallel, a stage in the
+  sequence, or a helper outside the flow), its room on the site (an existing one or a new
+  one) and its look on the dashboard. The next task runs it with no other change. Move or remove
+  it the same way.
 - **Add plugins and MCP servers per stage.** `/flow-setup extensions` suggests the ones that fit
   your repository (Playwright for a web UI, the connector of your tracker, grill-me for a harder
   interview, ponytail against over-engineering), installs only what you approve and tells the
@@ -148,6 +282,8 @@ setup.
 - **Use the same setup in Cursor, Codex and Copilot.** The Claude Code files are the source. A
   script generates Cursor rules and commands, a block in `AGENTS.md` for Codex, and Copilot
   agents and prompt files.
+
+</details>
 
 ## How a task runs
 
@@ -189,7 +325,8 @@ answer starts with a fixed line (`Status: DONE | DONE_WITH_CONCERNS | NEEDS_CONT
 for the stages, `Verdict: PASS | PASS_WITH_FINDINGS | FAIL` for the reviewers), so the
 orchestrator routes on that line, not on prose.
 
-### Why each step is there
+<details>
+<summary><b>Why each step is there</b></summary>
 
 | Step | What it prevents | What you get |
 | --- | --- | --- |
@@ -214,6 +351,8 @@ orchestrator routes on that line, not on prose.
 
 The cost is more tokens and a few minutes per task. The None lane skips refiner and tester for
 trivial changes; the reviewers always run, and a docs-only change skips the QA reviewer.
+
+</details>
 
 ## Add it to your repository
 
@@ -345,38 +484,18 @@ bash .claude/kit/scripts/work.sh ui start   # background, prints the link (with 
 bash .claude/kit/scripts/work.sh ui stop
 ```
 
-### Security of web answers
+### 8. Keep it current
 
-The hooks hold a question, a turn or a permission for the page through files in `.work/`, which
-every process of the project can write: an agent's background job, a test, a build script. So:
+- When a product source changes: `/product-source sync`.
+- When you edit an agent or a command: `python3 .claude/kit/scripts/export.py` (it regenerates
+  the tools already projected). In CI, `export.py --check` fails if they are out of date.
+- After adapting the agents: `python3 .claude/kit/evals/run.py --runs 3` (see [Evals](#evals)).
+- When a PR or MR merges: the next session offers the cleanup, or run `work.sh cleanup --all-done`.
+- When the kit changes: `git -C forecrew pull && ./forecrew/install.sh /path/to/your/repo`.
+  Only `.claude/kit/` is replaced.
 
-- An answer counts only when it is signed with the key in `~/.forecrew/private/answer.key`
-  (0600 in a 0700 directory, outside the project). The dashboard and the Telegram bridge sign
-  what they write; anything else is ignored and the request goes back to the terminal.
-- The page is served only with its link's key (`?k=`, printed by `ui start`), and every API call
-  needs the token the page carries. A local process without the key gets neither.
-- Allowing a permission from the page or Telegram is off by default: `work.sh ui allow on|off`,
-  one flag for your user in `~/.forecrew/private`. Off, a permission dialog shows in the terminal
-  at once, and the page and the phone only tell you it waits.
 
-This keeps out what cannot read `~/.forecrew/private`. An agent running unsandboxed as your user
-can read it; for the boundary to hold against agents, run them sandboxed with that directory
-unreadable, and do not paste the dashboard link into a session. `/task` opens the page with
-`ui start --open`, which never prints the key.
-
-One dashboard serves every project with Forecrew on your machine. Each project registers itself
-in `~/.forecrew/projects.json` when a Claude Code session starts in it, and `ui start` in a second
-project reuses the dashboard already running (it prints that dashboard's link to the project)
-instead of starting another. The project picker in the top bar switches the whole page, map and
-chat included; a project that is not on screen still shows its count of alerts there, and
-chimes when something starts waiting on you. Only the project on screen holds requests for the
-page; the others answer in their terminals as usual.
-
-In Cursor, Codex and Copilot the stages do not launch each other. Run each stage in a new chat
-or session, pick the role (`@agent-refiner` in Cursor, the `refiner` agent in Copilot, or "act
-as `.claude/agents/refiner.md`" in Codex) and give it the work directory. Run
-`bash .claude/kit/scripts/work.sh status` before moving to the next stage: it shows what is
-next, or why it cannot start yet.
+## Using it
 
 ### Starting a task
 
@@ -392,6 +511,12 @@ Without a tracker, put the ID in the branch name (`feat/csv-export`): the dashbo
 pull or merge request to its task by the worktree's current task, or by the ID in the branch or
 title. In Codex or Copilot, where there are no slash commands, say "follow
 `.claude/skills/task/SKILL.md` for: add CSV export to the report page".
+
+In Cursor, Codex and Copilot the stages do not launch each other. Run each stage in a new chat
+or session, pick the role (`@agent-refiner` in Cursor, the `refiner` agent in Copilot, or "act
+as `.claude/agents/refiner.md`" in Codex) and give it the work directory. Run
+`bash .claude/kit/scripts/work.sh status` before moving to the next stage: it shows what is
+next, or why it cannot start yet.
 
 ### The dashboard
 
@@ -423,9 +548,24 @@ title. In Codex or Copilot, where there are no slash commands, say "follow
 - **A held question or turn says why it let go** (the page hidden or closed, a timeout, a
   subagent started) and what to do: the picks to choose in the terminal, or the text to copy.
   Only a turn that asks is held, never while a subagent runs, so a session wakes by itself.
+- **Each step says what it handed over:** two lines of its file and the criteria it cites,
+  screenshots of the proof as a gallery (click for the lightbox), and a toast when a stage
+  lands while you watch.
+- **Three tabs beside the map:** *Task* (the steps, the task's tokens and cost, the rulings),
+  *Crew* (who works where, and the specialists you can hire) and *Costs* (every task compared,
+  and where the tokens go).
 - **The sidebar navigates:** one row per task with a status dot and one count, a filter (`/`),
   up/down/Enter, done tasks folded, the merge order (uncommitted work included) at the bottom;
   drag its edge to resize, or fold it to a rail of dots. Settings live in one gear menu.
+  The branch button at its top opens a parallel task (`work.sh fork`).
+
+One dashboard serves every project with Forecrew on your machine. Each project registers itself
+in `~/.forecrew/projects.json` when a Claude Code session starts in it, and `ui start` in a second
+project reuses the dashboard already running (it prints that dashboard's link to the project)
+instead of starting another. The project picker in the top bar switches the whole page, map and
+chat included; a project that is not on screen still shows its count of alerts there, and
+chimes when something starts waiting on you. Only the project on screen holds requests for the
+page; the others answer in their terminals as usual.
 
 ### Finishing a task
 
@@ -479,27 +619,18 @@ Off by default. In `flow.json`:
 - It never asks for, reads or prints a token: a missing or logged-out tool is named with what to
   run (`gh auth login`, `glab auth login --hostname <host>`).
 
-### 8. Keep it current
-
-- When a product source changes: `/product-source sync`.
-- When you edit an agent or a command: `python3 .claude/kit/scripts/export.py` (it regenerates
-  the tools already projected). In CI, `export.py --check` fails if they are out of date.
-- After adapting the agents: `python3 .claude/kit/evals/run.py --runs 3` (see [Evals](#evals)).
-- When a PR or MR merges: the next session offers the cleanup, or run `work.sh cleanup --all-done`.
-- When the kit changes: `git -C forecrew pull && ./forecrew/install.sh /path/to/your/repo`.
-  Only `.claude/kit/` is replaced.
-
 ## Commands
 
 | Command | What it does |
 | --- | --- |
 | `/flow-setup [existing\|tracker\|docs\|lenses\|stack\|extensions]` | configure or change the kit by interview |
 | `/task <request, ticket or link>` | run a task through the stages; a plain description is enough |
-| `/flow-agent [new\|move <name>\|remove <name>\|list]` | create, move or remove a specialized agent, its room and its place in the flow |
+| `/flow-agent [catalog\|add <name>\|new\|move <name>\|remove <name>\|list]` | hire a ready specialist from the kit's catalog, or create, move or remove a specialized agent, its room and its place in the flow |
 | `/product-source <url\|path> [...]` | register product sources, with an interview for each |
 | `/product-source sync` | re-read every source and list open tasks that used an old version |
 | `/product-source list` | show the registry |
 | `work.sh init <ID> "<title>"` | open a work directory (`/task` does this) |
+| `work.sh fork <ID> [--from <ref>]` | a parallel task: a worktree `<repo>-<ID>` beside the main checkout, on a new branch `<ID>` cut from `<ref>` (default `HEAD`); prints the command that opens a session there |
 | `work.sh status` | every stage: gate, status or verdict, open clarifications, and what is next. Exits 1 on a failure |
 | `work.sh review-package` | write `review.diff`: commits and diff since the base, new files included; then run the checks |
 | `work.sh checks` | run `checks` of `flow.json` and write `checks.md`. Exits 1 when one fails |
@@ -582,7 +713,8 @@ serve. Agents use them for that and never install anything themselves.
   flow.json            stage files, required sections, reviewer reading lists
   product-sources.md   tracker and product sources (written by /flow-setup and /product-source)
   LEARNINGS.md         tagged learnings
-  kit/                 protocol, hook, scripts, dashboard, evals, test (replaced on update)
+  kit/                 protocol, hook, scripts, dashboard, evals, test, the specialists'
+                       catalog (replaced on update)
 .cursor/rules/, .cursor/commands/    generated for Cursor
 AGENTS.md                            generated block between agent-flow-kit markers (Codex, Copilot)
 .github/agents/, .github/prompts/    generated for Copilot (with --tools copilot)
@@ -593,7 +725,7 @@ And per task, in `.work/<ID>/` (git-ignored):
 ```
 00-purpose.md   ledger.md   01-contract.md   02-change.md   03-proof.md
 review.diff     checks.md      04-review-{contract,security,qa,product}.md     05-retro.md
-findings-decision.md   closed
+findings-decision.md   closed   evidence/ (screenshots the proof cites)
 ```
 
 ## Configuration
@@ -613,6 +745,9 @@ findings-decision.md   closed
   files in it.
 - `rooms`: the site's rooms, each with its name in your languages and the agents at its
   stations. `agents`: the label, color and emblem of an agent you added. `/flow-agent` writes both.
+- `pricing`: price rows for the cost view, `{"<model id prefix>": [input, output, cache write,
+  cache read]}` in USD per million tokens. Anthropic's list prices are built in; a row here
+  replaces or adds one (a model you run through another provider, a negotiated price).
 - `forge`: `github`, `gitlab` or `none`. Only needed when the `origin` host does not say it
   (github.com is GitHub, other hosts are taken as GitLab). The dashboard reads `GITHUB_TOKEN`
   or `GH_TOKEN` (optional for a public repository) or `GITLAB_TOKEN` from its environment.
@@ -674,6 +809,12 @@ confirm it fails, then fix the agent's file until it passes.
   answerable only after you turn them on per worktree. Alerts are masked like the event log. It serves the page, `flow.json` and read-only endpoints; a task is addressed by
   its worktree's index in `git worktree list` and an id that must match `[A-Za-z0-9._-]+`, never
   by a path the browser sends.
+- Screenshots are served by name only (`png`, `jpg`, `gif`, `webp`; never `svg`), from the
+  task's own `evidence/` directory, never through a link, with the page's token, as their image
+  type with `nosniff`. Nothing masks an image: the tester is told to capture test data only.
+- The cost view reads token counts from Claude Code's transcripts: a subagent's at its stop (the
+  hook), the main session's found by its id under the Claude configuration directory, never by a
+  path written in the project. It reads only the usage numbers and the model name.
 - The product sources registry stores locations and versions, never content or credentials.
 - The Telegram bridge reads the token and chat id from the environment, never from a file, and
   no error it prints carries the token. It acts only on updates from that chat, and only through
@@ -683,6 +824,25 @@ confirm it fails, then fix the agent's file until it passes.
 - The checks run the commands written in `flow.json` with the shell, like a Makefile: review a
   change to `checks` as you would one to your CI.
 
+### Web answers
+
+The hooks hold a question, a turn or a permission for the page through files in `.work/`, which
+every process of the project can write: an agent's background job, a test, a build script. So:
+
+- An answer counts only when it is signed with the key in `~/.forecrew/private/answer.key`
+  (0600 in a 0700 directory, outside the project). The dashboard and the Telegram bridge sign
+  what they write; anything else is ignored and the request goes back to the terminal.
+- The page is served only with its link's key (`?k=`, printed by `ui start`), and every API call
+  needs the token the page carries. A local process without the key gets neither.
+- Allowing a permission from the page or Telegram is off by default: `work.sh ui allow on|off`,
+  one flag for your user in `~/.forecrew/private`. Off, a permission dialog shows in the terminal
+  at once, and the page and the phone only tell you it waits.
+
+This keeps out what cannot read `~/.forecrew/private`. An agent running unsandboxed as your user
+can read it; for the boundary to hold against agents, run them sandboxed with that directory
+unreadable, and do not paste the dashboard link into a session. `/task` opens the page with
+`ui start --open`, which never prints the key.
+
 ## Limits
 
 - The automatic gates are Claude Code only. In Cursor, Codex and Copilot you run
@@ -690,6 +850,9 @@ confirm it fails, then fix the agent's file until it passes.
 - The agents' behavior is checked by evals you run, not proven. Run them after adapting an
   agent, and add a case when one fails in real use.
 - Parallel reviewers need subagents, so only Claude Code runs them at the same time.
+- Costs are counted for Claude Code only, from the tasks run with this version of the kit
+  on. The main session's share is an estimate: its replies inside the task's time window, so two
+  tasks of one session at the same time share replies.
 - The dashboard shows live agent activity only for Claude Code. For the other tools it shows
   stages from the files.
 
@@ -716,7 +879,8 @@ python3 template/.claude/kit/test_page.py
 
 Covers the gates, readiness, the fix-round cap, the event log masking, the review package, the
 exports, the eval graders, the dashboard, the attention alerts and web answers, the hook
-wiring, the closing statuses with the GitHub and GitLab lookups, and the cleanup. `test_page.py`
+wiring, the closing statuses with the GitHub and GitLab lookups, the cleanup, the stage digests, the
+evidence endpoint, the cost per task, `work.sh fork` and the specialists' catalog. `test_page.py`
 checks the dashboard page without a browser: both languages carry every label the server can
 return, no English text is left outside the dictionary, noise starts collapsed, and the
 cleanup posts only what the plan offered. Each check was confirmed to fail when the behavior it covers was

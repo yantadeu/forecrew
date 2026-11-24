@@ -9,6 +9,11 @@
 #                                      and runs the project's checks (below); exit 1 when one fails
 #        work.sh checks                runs "checks" of flow.json (lint, build, tests) and writes
 #                                      .work/<ID>/checks.md, which the reviewers wait for
+#        work.sh fork <ID> [--from <ref>]   a parallel task: a new worktree next to the main checkout
+#                                      (<repo>-<ID>), on a new branch <ID> cut from <ref> (default
+#                                      HEAD), for a second session to work in while this one goes on;
+#                                      prints the command that opens it. The dashboard lists it on
+#                                      its own; cleaning up its task removes it.
 #        work.sh done [ID]             closes the task (current one by default): writes <ID>/closed, which
 #                                      makes it "done" without a PR/MR, and unmarks it if current
 #        work.sh findings <ID>         each review finding with its key and state, for the keyed
@@ -119,6 +124,36 @@ EOF
   checks)
     id=$(cat "$work/current" 2>/dev/null) || { echo "no current work" >&2; exit 2; }
     exec python3 "$(dirname "$0")/checks.py" run "$root" "$id"
+    ;;
+  fork)
+    shift
+    id="" from="HEAD"
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --from) from="${2:?--from needs a branch, tag or commit}"; shift 2 ;;
+        *) [ -z "$id" ] || { echo "usage: work.sh fork <ID> [--from <ref>]" >&2; exit 2; }; id="$1"; shift ;;
+      esac
+    done
+    # The ID names a branch and a directory: the init rule, and never a leading dot or dash.
+    if ! [[ "$id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+      echo "usage: work.sh fork <ID> [--from <ref>]; ID must match [A-Za-z0-9][A-Za-z0-9._-]* (got: $id)" >&2; exit 2
+    fi
+    [[ "$from" != -* ]] || { echo "--from takes a branch, tag or commit (got: $from)" >&2; exit 2; }
+    main=$(git -C "$root" worktree list --porcelain | sed -n '1s/^worktree //p')
+    dest="$(dirname "$main")/$(basename "$main")-$id"
+    [ ! -e "$dest" ] || { echo "$dest already exists" >&2; exit 2; }
+    git -C "$root" rev-parse -q --verify "$from^{commit}" >/dev/null || { echo "no commit $from" >&2; exit 2; }
+    if git -C "$root" show-ref -q --verify "refs/heads/$id"; then
+      echo "branch $id already exists: git worktree add <path> $id" >&2; exit 2
+    fi
+    git -C "$root" worktree add -q -b "$id" "$dest" "$from"
+    # A kit not committed yet would leave the fork without its gates: it gets this checkout's copy.
+    if [ ! -f "$dest/.claude/flow.json" ] && [ -d "$root/.claude" ]; then
+      cp -R "$root/.claude" "$dest/.claude"
+      echo "copied .claude/ into the fork (it is not committed yet)"
+    fi
+    echo "parallel task $id: $dest (branch $id from $from)"
+    printf 'next: cd %q && claude "/task %s"\n' "$dest" "$id"
     ;;
   done)
     cur=$(cat "$work/current" 2>/dev/null || true)
@@ -278,5 +313,5 @@ sys.exit(1)') || { echo "no free port in 8787-8799" >&2; exit 2; }
         ;;
     esac
     ;;
-  *) sed -n 2,38p "$0"; exit 2 ;;
+  *) sed -n 2,43p "$0"; exit 2 ;;
 esac
