@@ -290,6 +290,9 @@ def checks():
     switches()
     closing_docs()
     projects_server()
+    stage_digest()
+    evidence_and_costs()
+    specialist_catalog()
     print("ok: gates, readiness, fix-round cap, event log, review package, exports, eval graders, dashboard, telegram, project checks,"
           " learnings, merge order, attention alerts, web answers, hook wiring, closing and cleanup, one dashboard for every project")
 
@@ -3717,6 +3720,196 @@ def closing_git():
         shutil.rmtree(os.path.join(merged, ".work", "G-1"))
         p = subprocess.run([sys.executable, DASH, "hook", repo], capture_output=True, text=True)
         assert p.returncode == 0 and p.stdout == "", f"nothing done, nothing printed: {p.stdout!r}"
+    finally:
+        shutil.rmtree(base)
+
+
+def stage_digest():
+    """Each stage hands the page two lines of its first section that has any (a review's findings,
+    or why it does not apply, first), masked, and the criteria the file cites."""
+    d = load_dashboard("dash_digest")
+    assert d.digest(None, []) is None
+    contract = ("Status: DONE\n\n## The request in one sentence\n<!-- template -->\n- **Export** the report as CSV\n"
+                "  second line, token=abc123\n  third line\n## How it is proven\n- AC-001: x\n- AC-002: y\n")
+    got = d.digest(contract, ["The request in one sentence", "How it is proven"])
+    assert got["lines"] == ["Export the report as CSV", "second line, token=[masked]"], got
+    assert got["acs"] == ["AC-001", "AC-002"], got
+    review = "Verdict: PASS\n\n## Findings\n\n## Not applicable\nNo UI in this change.\n"
+    assert d.digest(review, ["Findings"])["lines"] == ["No UI in this change."], "a review says why it does not apply"
+    review = "Verdict: PASS_WITH_FINDINGS\n\n## Sources compared\n- spec v3\n## Findings\n- [low] [route: tester] AC-002: weak\n"
+    assert d.digest(review, ["Sources compared", "Findings"])["lines"] == ["[low] [route: tester] AC-002: weak"], \
+        "a review's findings come before its other sections"
+    proof = "Status: DONE\n\n## Tests\n| a | b |\n|---|---|\n- AC-001 ![empty state](evidence/ac-001.png)\n"
+    assert d.digest(proof, ["Tests"])["lines"] == ["| a | b |", "AC-001 📷 empty state"], "a table rule is skipped, an image named"
+    assert d.digest("x" * 400 + "\n", [])["lines"] == [], "no section, nothing to say"
+    long = "## Tests\n" + "y" * 400 + "\n"
+    assert len(d.digest(long, ["Tests"])["lines"][0]) == d.DIGEST_LINE, "a long line is cut"
+
+
+def evidence_and_costs():
+    """Screenshots under <ID>/evidence/ reach the page by name only, never through a link or a
+    path; the hook records what each subagent spent and the page prices it, the main session's
+    share by its transcript inside the task's window; the catalog is complete; fork makes a
+    worktree."""
+    import http.client
+    import threading
+    d = load_dashboard("dash_evidence")
+    base = os.path.realpath(tempfile.mkdtemp())
+    old_cfg = os.environ.get("CLAUDE_CONFIG_DIR")
+    try:
+        repo = new_repo(base)
+        proof = "Status: DONE\n\n## Tests\n- AC-001: ok ![the empty state](evidence/ac-001.png)\n"
+        add_task(repo, "E-1", files=[("03-proof.md", proof)], current=True)
+        ev = os.path.join(repo, ".work", "E-1", "evidence")
+        os.makedirs(ev)
+        png = b"\x89PNG\r\n\x1a\n" + b"0" * 64
+        open(os.path.join(ev, "ac-001.png"), "wb").write(png)
+        open(os.path.join(ev, "loose.webp"), "wb").write(b"RIFF")
+        open(os.path.join(ev, "notes.txt"), "w").write("x")
+        open(os.path.join(ev, "page.svg"), "w").write("<svg onload=alert(1)>")
+        secret = os.path.join(base, "secret.png")
+        open(secret, "wb").write(b"SECRET")
+        os.symlink(secret, os.path.join(ev, "link.png"))
+        files = {"03-proof.md": proof}
+        got = d.evidence_list(os.path.join(repo, ".work", "E-1"), files)
+        assert [(x["name"], x["caption"], x["stage"]) for x in got] == [
+            ("ac-001.png", "the empty state", "03-proof.md"), ("loose.webp", "", None)], \
+            f"images only, no link, no svg; the caption and the stage that cites it: {got}"
+        assert d.evidence_file(repo, 0, "E-1", "ac-001.png") == (png, "image/png")
+        for tid, name, why in (("E-1", "link.png", "a link"), ("E-1", "page.svg", "an svg"), ("E-1", "../secret.png", "a path"),
+                               ("E-1", "notes.txt", "not an image"), ("NOPE", "ac-001.png", "no such task"),
+                               ("..", "secret.png", "a dot id"), ("E-1", "missing.png", "missing")):
+            assert d.evidence_file(repo, 0, tid, name) is None, f"evidence refused for {why}"
+        assert d.evidence_file(repo, 9, "E-1", "ac-001.png") is None, "a worktree outside the list"
+        # A whole evidence directory that is a link is refused too.
+        add_task(repo, "E-2")
+        os.symlink(base, os.path.join(repo, ".work", "E-2", "evidence"))
+        assert d.evidence_file(repo, 0, "E-2", "secret.png") is None and d.evidence_list(os.path.join(repo, ".work", "E-2"), {}) == []
+
+        token = "tok-" + "e" * 20
+        server = d.http.server.ThreadingHTTPServer(("127.0.0.1", 0), type("H", (d.Handler,), {"root": repo, "token": token}))
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            def get(path):
+                c = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=10)
+                c.request("GET", path, headers={"Host": f"127.0.0.1:{server.server_port}"})
+                r = c.getresponse()
+                return r.status, r.getheader("Content-Type"), r.getheader("X-Content-Type-Options"), r.read()
+            assert get("/api/evidence?wt=0&id=E-1&f=ac-001.png")[0] == 403, "evidence needs the page's token"
+            code, ctype, sniff, body = get(f"/api/evidence?wt=0&id=E-1&f=ac-001.png&t={token}")
+            assert (code, ctype, sniff, body) == (200, "image/png", "nosniff", png), (code, ctype, sniff)
+            assert get(f"/api/evidence?wt=0&id=E-1&f=link.png&t={token}")[0] == 404
+            code, _, _, body = get(f"/api/task?wt=0&id=E-1&t={token}")
+            task = json.loads(body)
+            assert [x["name"] for x in task["evidence"]] == ["ac-001.png", "loose.webp"], task["evidence"]
+            proof_stage = next(s for s in task["stages"] if s["file"] == "03-proof.md")
+            assert proof_stage["digest"]["lines"] == ["AC-001: ok 📷 the empty state"], proof_stage["digest"]
+            code, _, _, body = get(f"/api/specialists?t={token}")
+            assert code == 200 and {s["name"] for s in json.loads(body)} >= {"perf-reviewer", "a11y-reviewer"}
+        finally:
+            server.shutdown()
+
+        # The hook records a subagent's usage at its stop, from its own transcript, one row per reply.
+        agent_t = os.path.join(base, "agent.jsonl")
+        reply = lambda rid, model, u, side=True, ts="2026-11-24T12:00:00Z": json.dumps(
+            {"type": "assistant", "isSidechain": side, "timestamp": ts,
+             "message": {"id": rid, "model": model, "usage": u}})
+        u1 = {"input_tokens": 100, "output_tokens": 50, "cache_creation_input_tokens": 1000, "cache_read_input_tokens": 9000}
+        open(agent_t, "w").write("\n".join([
+            reply("m1", "claude-opus-5-5", dict(u1, output_tokens=10)), reply("m1", "claude-opus-5-5", u1),
+            reply("m2", "claude-opus-5-5", u1), reply("m3", "<synthetic>", u1),
+            json.dumps({"type": "user", "message": {"content": "work dir .work/E-1"}})]) + "\n")
+        env = dict(os.environ, CLAUDE_PROJECT_DIR=repo)
+        shutil.copytree(os.path.join(KIT), os.path.join(repo, ".claude", "kit"), ignore=shutil.ignore_patterns("__pycache__"))
+        for event in ({"hook_event_name": "PreToolUse", "session_id": "sess-1", "tool_name": "Bash", "tool_input": {"command": "ls"}},
+                      {"hook_event_name": "SubagentStart", "agent_id": "a9", "agent_type": "tester"},
+                      {"hook_event_name": "SubagentStop", "agent_id": "a9", "agent_type": "tester", "stop_hook_active": True,
+                       "agent_transcript_path": agent_t, "last_assistant_message": "done"}):
+            p = subprocess.run([sys.executable, os.path.join(repo, ".claude", "kit", "hooks", "flow.py")],
+                               input=json.dumps(event), capture_output=True, text=True, env=env, cwd=repo)
+            assert p.returncode == 0, p.stderr
+        evs = d.events(os.path.join(repo, ".work"))["E-1"]
+        stop_ev = [e for e in evs if e["ev"] == "stop"][-1]
+        assert stop_ev["usage"] == {"claude-opus-5-5": [200, 100, 2000, 18000, 2]}, \
+            f"two replies, the last line of each, the synthetic one left out: {stop_ev.get('usage')}"
+        assert [e.get("session") for e in evs if e["ev"] == "tool"] == ["sess-1"], "the main session's id is logged"
+
+        # The main session's share: its own transcript, by id, replies inside the task's window only.
+        cfg = os.path.join(base, "cfg")
+        key = re.sub(r"[^A-Za-z0-9]", "-", repo)
+        os.makedirs(os.path.join(cfg, "projects", key))
+        t_in = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(evs[0]["t"]))
+        t_out = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(evs[0]["t"] - 3600))
+        main_t = os.path.join(cfg, "projects", key, "sess-1.jsonl")
+        open(main_t, "w").write("\n".join([
+            reply("s1", "claude-sonnet-5-5", u1, side=False, ts=t_in),
+            reply("s0", "claude-sonnet-5-5", u1, side=False, ts=t_out),
+            reply("s2", "claude-opus-5-5", u1, side=True, ts=t_in),
+            reply("s3", "mystery-model", {"input_tokens": 7}, side=False, ts=t_in)]) + "\n")
+        os.environ["CLAUDE_CONFIG_DIR"] = cfg
+        u = d.task_usage(repo, evs, d.flow_of(repo), home_dir=base)
+        by = {r["type"]: r for r in u["by"]}
+        assert by["tester"]["tokens"] == [200, 100, 2000, 18000] and by["tester"]["runs"] == 1
+        # Opus 5.5: 4 in, 20 out, 5 cache write, 0.2 cache read, per million.
+        assert abs(by["tester"]["cost"] - (200 * 4 + 100 * 20 + 2000 * 5 + 18000 * 0.2) / 1e6) < 1e-9, by["tester"]
+        assert by["main"]["tokens"] == [107, 50, 1000, 9000] and by["main"]["replies"] == 2, \
+            f"the reply in the window and the unpriced one; not the one an hour before, not a sidechain: {by['main']}"
+        assert abs(by["main"]["cost"] - (100 * 2 + 50 * 10 + 1000 * 2.5 + 9000 * 0.1) / 1e6) < 1e-9, by["main"]
+        assert u["unpriced"] == ["mystery-model"] and u["tokens"] == [307, 150, 3000, 27000], u
+        # The appended reply is read on the next call, and a pricing row in flow.json prices it.
+        open(main_t, "a").write(reply("s4", "mystery-model", {"output_tokens": 1_000_000}, side=False, ts=t_in) + "\n")
+        flow = dict(d.flow_of(repo), pricing={"mystery": [1, 2, 0, 0], "bad": [1, "x"]})
+        u = d.task_usage(repo, evs, flow, home_dir=base)
+        main = next(r for r in u["by"] if r["type"] == "main")
+        assert main["unpriced"] == [] and abs(main["cost"] - (100 * 2 + 50 * 10 + 1000 * 2.5 + 9000 * 0.1 + 7 * 1 + 1_000_000 * 2) / 1e6) < 1e-9, main
+        assert d.price_table({"pricing": {"bad": [1, "x"]}}) == d.PRICES, "a malformed row is ignored"
+        listed = d.project_usage(repo)
+        assert [(x["id"], x["tokens"]) for x in listed if x["id"] == "E-1"] == [("E-1", [307, 1_000_150, 3000, 27000])], listed
+
+        # A parallel task: a worktree next to the main checkout, on its own branch.
+        p = subprocess.run(["bash", os.path.join(repo, ".claude", "kit", "scripts", "work.sh"), "fork", "F-9"],
+                           capture_output=True, text=True, env=env, cwd=repo)
+        dest = os.path.join(base, "repo-F-9")
+        assert p.returncode == 0 and os.path.isfile(os.path.join(dest, ".claude", "flow.json")), p.stdout + p.stderr
+        assert git_in(dest, "rev-parse", "--abbrev-ref", "HEAD").strip() == "F-9"
+        assert f'claude "/task F-9"' in p.stdout, p.stdout
+        for args in (["fork", "F-9"], ["fork", "../x"], ["fork", "-x"], ["fork", "G-1", "--from", "--evil"], ["fork", "G-2", "--from", "nope"]):
+            p = subprocess.run(["bash", os.path.join(repo, ".claude", "kit", "scripts", "work.sh"), *args],
+                               capture_output=True, text=True, env=env, cwd=repo)
+            assert p.returncode == 2, f"{args}: {p.stdout}{p.stderr}"
+        assert not os.path.exists(os.path.join(base, "repo-G-1")) and not os.path.exists(os.path.join(base, "repo-G-2"))
+    finally:
+        if old_cfg is None:
+            os.environ.pop("CLAUDE_CONFIG_DIR", None)
+        else:
+            os.environ["CLAUDE_CONFIG_DIR"] = old_cfg
+        shutil.rmtree(base)
+
+
+def specialist_catalog():
+    """Every specialist of the catalog has its agent file, a lens, a look the dashboard can draw
+    and its words in both languages; installed ones are marked."""
+    d = load_dashboard("dash_catalog")
+    cat = json.load(open(os.path.join(KIT, "specialists", "catalog.json")))
+    emblems = re.search(r"emblem among (.*?)\. Suggest", open(os.path.join(CLAUDE, "commands", "flow-agent.md")).read(), re.S).group(1)
+    page = open(os.path.join(KIT, "dashboard", "index.html")).read()
+    assert len(cat) >= 4 and len({s["name"] for s in cat}) == len(cat) and len({s["lens"] for s in cat}) == len(cat)
+    for s in cat:
+        text = open(os.path.join(KIT, "specialists", s["name"] + ".md")).read()
+        assert re.search(rf"^name: {re.escape(s['name'])}$", text, re.M), s["name"]
+        assert f"04-review-{s['lens']}.md" in text and "Verdict:" in text and "## Not applicable" in text, s["name"]
+        assert f"`{s['emblem']}`" in emblems and f"{s['emblem']}:" in page, f"{s['name']}: emblem {s['emblem']}"
+        assert re.fullmatch(r"#[0-9a-f]{6}", s["color"]) and s["room"] in {r["id"] for r in json.load(open(FLOW))["rooms"]}
+        for k in ("label", "pitch"):
+            assert s[k].get("en") and s[k].get("pt"), f"{s['name']}: {k} in both languages"
+    base = tempfile.mkdtemp()
+    try:
+        repo = new_repo(base)
+        flow = json.load(open(FLOW))
+        flow["agents"] = {"perf-reviewer": {"label": {"en": "Perf"}}}
+        open(os.path.join(repo, ".claude", "flow.json"), "w").write(json.dumps(flow))
+        got = {s["name"]: s["installed"] for s in d.specialists(repo)}
+        assert got["perf-reviewer"] is True and got["a11y-reviewer"] is False, got
     finally:
         shutil.rmtree(base)
 

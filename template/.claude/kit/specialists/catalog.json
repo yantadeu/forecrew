@@ -1,0 +1,18 @@
+[
+  {"name": "perf-reviewer", "lens": "perf", "room": "review", "color": "#fb923c", "emblem": "gauge", "tags": ["performance"],
+   "label": {"en": "Performance reviewer", "pt": "Revisor de performance"},
+   "pitch": {"en": "Hot paths, N+1 queries, unbounded loops and payloads, missing indexes: what gets slow at ten times the data.",
+             "pt": "Caminhos quentes, consultas N+1, loops e payloads sem limite, índices faltando: o que fica lento com dez vezes mais dados."}},
+  {"name": "a11y-reviewer", "lens": "a11y", "room": "review", "color": "#a3e635", "emblem": "eye", "tags": ["accessibility", "ui"],
+   "label": {"en": "Accessibility reviewer", "pt": "Revisor de acessibilidade"},
+   "pitch": {"en": "Keyboard, focus, labels, contrast, motion: the screen as a keyboard or screen-reader user meets it.",
+             "pt": "Teclado, foco, rótulos, contraste, movimento: a tela como quem usa teclado ou leitor de tela a encontra."}},
+  {"name": "migration-reviewer", "lens": "migration", "room": "review", "color": "#e879f9", "emblem": "db", "tags": ["data", "migration"],
+   "label": {"en": "Data migration reviewer", "pt": "Revisor de migração de dados"},
+   "pitch": {"en": "Schema and data changes: locks on big tables, backfills, the rollback path, old and new code running side by side.",
+             "pt": "Mudanças de schema e dados: locks em tabelas grandes, backfills, o caminho de volta, código velho e novo rodando juntos."}},
+  {"name": "api-compat-reviewer", "lens": "api", "room": "review", "color": "#fde047", "emblem": "globe", "tags": ["api", "integration"],
+   "label": {"en": "API compatibility reviewer", "pt": "Revisor de compatibilidade de API"},
+   "pitch": {"en": "Breaking changes to what others call: removed fields, new required inputs, changed errors, events and versions.",
+             "pt": "Quebras no que outros chamam: campos removidos, entradas novas obrigatórias, erros, eventos e versões que mudaram."}}
+]

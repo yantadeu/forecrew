@@ -13,6 +13,9 @@ directory of each worktree from `git worktree list` and serves:
   GET  /api/attention                sessions waiting on the dev, per worktree (hooks/attention.py)
   GET  /api/worktrees                every worktree, with or without a task: its path, its switches
                                      and whether a Claude session is alive there (the page's chat)
+  GET  /api/usage                    every task's tokens and API-equivalent cost, per agent type
+  GET  /api/evidence?wt=<n>&id=<ID>&f=<name>   one screenshot of <ID>/evidence/ (png, jpg, gif, webp)
+  GET  /api/specialists              the catalog of specialists /flow-agent add installs
   GET  /api/projects                 every project of the registry (one dashboard serves them all):
                                      its name, its alert count, whether a session is alive there
 
@@ -64,6 +67,7 @@ import select
 import shlex
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import textwrap
@@ -295,8 +299,42 @@ def stages(flow, tdir):
                     "needs_verdict": review, "verdict": verdict, "status": None if review else word,
                     "open": len(MARKER_RX.findall(text or "")),
                     "na": review and verdict == "PASS" and bool(text and NOT_APPLICABLE_RX.search(text)),
-                    "settled": review and agent != ALWAYS_RERUN and verdict == "PASS"})
+                    "settled": review and agent != ALWAYS_RERUN and verdict == "PASS",
+                    "digest": digest(text, st.get("sections"))})
     return out
+
+
+SECTION_RX = re.compile(r"^##\s+(.+?)\s*$", re.M)
+# A review's findings, or why it does not apply, say more than its other sections.
+DIGEST_FIRST = ("not applicable", "findings")
+DIGEST_LINE = 180
+LEAD_RX = re.compile(r"^(?:[-*+]\s+|\d+[.)]\s+|>\s*|#+\s*)+")
+
+
+def digest(text, sections):
+    """What a stage handed over, for the page: the first two lines of the first section that has
+    any (a review's findings or why it does not apply first, then the stage's sections in
+    flow.json order), and the acceptance criteria the file cites. Masked like every file text."""
+    if not text:
+        return None
+    text = mask_text(re.sub(r"<!--.*?-->", "", text, flags=re.S))
+    heads = list(SECTION_RX.finditer(text))
+    body = {}
+    for i, h in enumerate(heads):
+        body.setdefault(h.group(1).strip().lower(), text[h.end():heads[i + 1].start() if i + 1 < len(heads) else len(text)])
+    lines = []
+    for name in (*DIGEST_FIRST, *(str(x).lower() for x in (sections or []))):
+        for raw in body.get(name, "").splitlines():
+            line = EVIDENCE_REF.sub(lambda m: "📷 " + (m.group(1).strip() or m.group(2)), LEAD_RX.sub("", raw.strip()))
+            line = line.replace("**", "").strip()
+            if not line or set(line) <= set("|-: "):
+                continue
+            lines.append(line if len(line) <= DIGEST_LINE else line[:DIGEST_LINE - 1] + "…")
+            if len(lines) == 2:
+                break
+        if lines:
+            break
+    return {"lines": lines, "acs": sorted(set(re.findall(r"\bAC-\d+\b", text)))}
 
 
 def status(stage_list, lanes, tdir=None):
@@ -1165,7 +1203,8 @@ def task_detail(root, wt_index, tid, now=None):
             "rounds": max(0, sum(1 for e in mine if e.get("ev") == "start" and e.get("type") == "executor") - 1),
             "max_rounds": flow.get("max_fix_rounds", 3),
             "rulings": [line[2:] for line in ledger.splitlines() if line.startswith("- Ruling:")],
-            "stages": st, "files": files, "agents": lanes, "events": mine[-EVENTS_PER_TASK:]}
+            "stages": st, "files": files, "agents": lanes, "events": mine[-EVENTS_PER_TASK:],
+            "evidence": evidence_list(tdir, files), "usage": task_usage(wt, mine, flow)}
 
 
 def safe_id(i):
@@ -1368,13 +1407,12 @@ TURN_MAX = 8000
 _tail_cache = {}
 
 
-def transcript_tail(wt, session, home_dir):
-    """The last assistant text of a session, masked, from its transcript under
-    <config>/projects/<key of the worktree>/<session>.jsonl. Fallback for a "your turn" alert
-    written by an older hook, which kept only the first 200 characters: the ask ("ok?") is at
-    the end of the message, and the dev had to read it in the terminal."""
+def transcript_file(wt, session, home_dir):
+    """The transcript of a session, <config>/projects/<key of the worktree>/<session>.jsonl, or
+    None. Found by the session's id under the Claude config directories only: never a path that
+    a file of the project names."""
     if not safe_id(session):
-        return ""
+        return None
     # Claude Code keys a project by the path it was started in, which may be the symlinked one
     # (/tmp against /private/tmp): both spellings are tried.
     keys = list(dict.fromkeys(re.sub(r"[^A-Za-z0-9]", "-", p) for p in (wt, os.path.realpath(wt))))
@@ -1386,10 +1424,22 @@ def transcript_tail(wt, session, home_dir):
         pass
     for config, key in ((c, k) for c in filter(None, configs) for k in keys):
         path = os.path.join(config, "projects", key, session + ".jsonl")
-        try:
-            st = os.stat(path)
-        except OSError:
-            continue
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def transcript_tail(wt, session, home_dir):
+    """The last assistant text of a session, masked, from its transcript under
+    <config>/projects/<key of the worktree>/<session>.jsonl. Fallback for a "your turn" alert
+    written by an older hook, which kept only the first 200 characters: the ask ("ok?") is at
+    the end of the message, and the dev had to read it in the terminal."""
+    path = transcript_file(wt, session, home_dir)
+    try:
+        st = os.stat(path) if path else None
+    except OSError:
+        st = None
+    if st:
         hit = _tail_cache.get(path)
         if hit and hit[0] == st.st_mtime:
             return hit[1]
@@ -1415,6 +1465,199 @@ def transcript_tail(wt, session, home_dir):
         _tail_cache[path] = (st.st_mtime, text)
         return text
     return ""
+
+
+# ---- what a task spent: tokens per stage, priced at list rates ----
+# USD per million tokens: input, output, cache write (5 min), cache read. Anthropic's list prices of
+# 2026-11, matched by the longest model id prefix; "pricing" in flow.json replaces or adds rows
+# ({"<model id prefix>": [input, output, cache write, cache read]}). A subscription pays no price
+# per token: the page calls this the API-equivalent cost.
+PRICES = {
+    "claude-fable-5-2": (8, 40, 10, 0.2), "claude-mythos-5-2": (8, 40, 10, 0.2),
+    "claude-fable-5": (10, 50, 12.5, 1), "claude-mythos-5": (10, 50, 12.5, 1),
+    "claude-opus-5-5": (4, 20, 5, 0.2), "claude-opus-5": (5, 25, 6.25, 0.5), "claude-opus-4": (5, 25, 6.25, 0.5),
+    "claude-sonnet-5-5": (2, 10, 2.5, 0.1), "claude-sonnet-5": (2, 10, 2.5, 0.2), "claude-sonnet-4": (3, 15, 3.75, 0.3),
+    "claude-haiku-5-5": (0.1, 0.5, 0.125, 0.01), "claude-haiku-4": (1, 5, 1.25, 0.1),
+}
+# The main session's replies are the task's from just before its first event to just after its last.
+MAIN_SLACK = 120
+MAIN_SESSIONS_MAX = 20
+_usage_cache, _usage_lock = {}, threading.Lock()
+
+
+def price_table(flow):
+    table = dict(PRICES)
+    extra = flow.get("pricing") if isinstance(flow, dict) else None
+    for k, v in (extra.items() if isinstance(extra, dict) else ()):
+        if isinstance(k, str) and isinstance(v, list) and len(v) == 4 and all(
+                isinstance(x, (int, float)) and not isinstance(x, bool) and x >= 0 for x in v):
+            table[k] = tuple(v)
+    return table
+
+
+def cost_of(model, tokens, table):
+    """USD of [input, output, cache write, cache read] tokens of a model, None for an unknown model."""
+    key = max((k for k in table if model.startswith(k)), key=len, default=None)
+    return None if key is None else sum(n * p for n, p in zip(tokens[:4], table[key])) / 1e6
+
+
+def session_rows(path):
+    """The usage rows of a session's transcript, read once and then only what was appended."""
+    with _usage_lock:
+        try:
+            st = os.stat(path)
+        except OSError:
+            return {}
+        hit = _usage_cache.get(path)
+        if not hit or hit["ino"] != (st.st_ino, st.st_dev) or st.st_size < hit["off"]:
+            hit = {"off": 0, "rows": {}, "ino": (st.st_ino, st.st_dev)}
+        if st.st_size > hit["off"]:
+            rows, hit["off"] = _FLOW.usage_rows(path, hit["off"])
+            hit["rows"].update(rows)
+        _usage_cache[path] = hit
+        return hit["rows"]
+
+
+def task_usage(wt, evs, flow, home_dir=None):
+    """Tokens and API-equivalent cost of a task, per agent type: each subagent from its last stop
+    event (the hook summed its transcript there), the main session from its own transcript, the
+    replies inside the task's window. Two tasks of one session at the same time would share
+    replies: the page marks the main session's share as an estimate."""
+    table, by = price_table(flow), {}
+
+    def add(kind, model, t, run):
+        b = by.setdefault(kind, {"type": kind, "runs": set(), "tokens": [0] * 5, "cost": 0.0, "models": set(), "unpriced": set()})
+        b["runs"].add(run)
+        b["models"].add(model)
+        for i in range(5):
+            b["tokens"][i] += t[i]
+        c = cost_of(model, t, table)
+        if c is None:
+            b["unpriced"].add(model)
+        else:
+            b["cost"] += c
+
+    last = {}
+    for e in evs:
+        if e.get("ev") == "stop" and isinstance(e.get("usage"), dict):
+            last[e.get("agent")] = e
+    for e in last.values():
+        for model, t in e["usage"].items():
+            if isinstance(model, str) and isinstance(t, list) and len(t) == 5 and all(
+                    isinstance(x, int) and not isinstance(x, bool) and x >= 0 for x in t):
+                add(e.get("type") or "agent", model[:60], t, e.get("agent"))
+    sessions = sorted({e["session"] for e in evs if e.get("agent") == "main" and isinstance(e.get("session"), str)})
+    if sessions:
+        t0, t1 = evs[0]["t"] - MAIN_SLACK, evs[-1]["t"] + MAIN_SLACK
+        for sid in sessions[:MAIN_SESSIONS_MAX]:
+            path = transcript_file(wt, sid, home_dir or os.path.expanduser("~"))
+            for ts, model, *tok in (session_rows(path).values() if path else ()):
+                if t0 <= ts <= t1:
+                    add("main", model, [*tok, 1], sid)
+    rows = [{"type": b["type"], "runs": len(b["runs"]), "tokens": b["tokens"][:4], "replies": b["tokens"][4],
+             "cost": round(b["cost"], 6), "models": sorted(b["models"]), "unpriced": sorted(b["unpriced"])}
+            for b in by.values()]
+    rows.sort(key=lambda r: (-r["cost"], -sum(r["tokens"])))
+    return {"by": rows, "tokens": [sum(r["tokens"][i] for r in rows) for i in range(4)],
+            "cost": round(sum(r["cost"] for r in rows), 6),
+            "unpriced": sorted({m for r in rows for m in r["unpriced"]})}
+
+
+def project_usage(root):
+    """Every task's tokens and cost, the most recent first: the page's cost view."""
+    out = []
+    for i, (wt, _branch) in enumerate(worktrees(root)):
+        wdir = work_dir(wt)
+        if not wdir:
+            continue
+        flow, by_work = flow_of(wt), events(wdir)
+        for tid in task_ids(wdir):
+            evs = by_work.get(tid, [])
+            out.append({"wt": i, "worktree": os.path.basename(wt), "id": tid, "title": title(os.path.join(wdir, tid), tid),
+                        "start": evs[0]["t"] if evs else None, "end": evs[-1]["t"] if evs else None,
+                        **task_usage(wt, evs, flow)})
+    out.sort(key=lambda x: -(x["end"] or 0))
+    return out
+
+
+# ---- visual evidence: screenshots a stage saved under <ID>/evidence/ ----
+EVIDENCE_DIR = "evidence"
+EVIDENCE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,119}\.(png|jpe?g|gif|webp)", re.I)
+EVIDENCE_TYPES = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"}
+EVIDENCE_MAX_BYTES = 15 * 1024 * 1024
+EVIDENCE_SHOWN = 60
+EVIDENCE_REF = re.compile(r"!\[([^\]\n]*)\]\(<?(?:\./)?evidence/([^)\s>]+)>?\)")
+
+
+def evidence_dir(tdir):
+    """The task's evidence directory, None when missing or a link (it could lead anywhere)."""
+    d = os.path.join(tdir, EVIDENCE_DIR)
+    return d if not os.path.islink(tdir) and not os.path.islink(d) and os.path.isdir(d) else None
+
+
+def evidence_list(tdir, files):
+    """Each image of the evidence directory, with the caption and the stage file that cite it
+    (`![caption](evidence/<name>)`); an image no stage cites is listed with neither."""
+    d = evidence_dir(tdir)
+    if not d:
+        return []
+    cited = {}
+    for fname, text in files.items():
+        for m in EVIDENCE_REF.finditer(text or ""):
+            cited.setdefault(m.group(2), (m.group(1).strip()[:200], fname))
+    out = []
+    for n in sorted(os.listdir(d)):
+        p = os.path.join(d, n)
+        if not EVIDENCE_NAME.fullmatch(n) or os.path.islink(p) or not os.path.isfile(p):
+            continue
+        cap, by = cited.get(n, ("", None))
+        out.append({"name": n, "caption": cap, "stage": by, "size": os.path.getsize(p), "t": int(os.path.getmtime(p))})
+        if len(out) >= EVIDENCE_SHOWN:
+            break
+    return out
+
+
+def evidence_file(root, wt_index, tid, name):
+    """(bytes, content type) of one evidence image, or None. The worktree by index, the task by
+    the ID rule and among the worktree's tasks, the file by name: no path the browser sends
+    reaches the disk, and no link is followed."""
+    wts = worktrees(root)
+    if not ID_RX.fullmatch(tid or "") or not EVIDENCE_NAME.fullmatch(name or "") or not 0 <= wt_index < len(wts):
+        return None
+    wdir = work_dir(wts[wt_index][0])
+    if not wdir or tid not in task_ids(wdir):
+        return None
+    d = evidence_dir(os.path.join(wdir, tid))
+    if not d:
+        return None
+    try:
+        fd = os.open(os.path.join(d, name), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
+        return None
+    with os.fdopen(fd, "rb") as f:
+        if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+            return None
+        data = f.read(EVIDENCE_MAX_BYTES + 1)
+    if len(data) > EVIDENCE_MAX_BYTES:
+        return None
+    return data, EVIDENCE_TYPES[name.rsplit(".", 1)[1].lower()]
+
+
+# ---- the catalog of specialists /flow-agent installs ----
+SPECIALISTS = os.path.join(KIT, "specialists", "catalog.json")
+
+
+def specialists(root):
+    """The catalog, each entry marked installed when the project already has that agent."""
+    try:
+        with open(SPECIALISTS) as f:
+            cat = json.load(f)
+    except (OSError, ValueError):
+        return []
+    flow = flow_of(root)
+    have = set(flow.get("stages") or {}) | set(flow.get("agents") or {})
+    return [{**s, "installed": s.get("name") in have or os.path.isfile(os.path.join(root, ".claude", "agents", f"{s.get('name')}.md"))}
+            for s in (cat if isinstance(cat, list) else []) if isinstance(s, dict) and isinstance(s.get("name"), str)]
 
 
 def alert_action(alert, answers_on, wt):
@@ -2054,11 +2297,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
     # Open event streams of this server class; over MAX_STREAMS a new one gets 503.
     streams = None
 
-    def send(self, code, body, ctype):
+    def send(self, code, body, ctype, cache="no-store"):
         data = body.encode() if isinstance(body, str) else body
         self.send_response(code)
         self.send_header("Content-Type", ctype)
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", cache)
+        # An evidence image is served as the image type its name says, never sniffed as a page.
+        self.send_header("X-Content-Type-Options", "nosniff")
         # The page carries the token and the answer buttons: a site that framed it could
         # overlay them and borrow the dev's click.
         self.send_header("X-Frame-Options", "DENY")
@@ -2217,6 +2462,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send(200, json.dumps(flow_of(root)), "application/json")
         if url.path == "/api/tasks":
             return self.send(200, json.dumps(list_tasks(root)), "application/json")
+        if url.path == "/api/usage":
+            return self.send(200, json.dumps(project_usage(root)), "application/json")
+        if url.path == "/api/specialists":
+            return self.send(200, json.dumps(specialists(root)), "application/json")
+        if url.path == "/api/evidence":
+            try:
+                wt = int((q.get("wt") or ["-1"])[0])
+            except ValueError:
+                wt = -1
+            got = evidence_file(root, wt, (q.get("id") or [""])[0], (q.get("f") or [""])[0])
+            if got is None:
+                return self.send(404, json.dumps({"error": "no such evidence"}), "application/json")
+            # The URL names the file and its time (&v=): a new screenshot is a new URL.
+            return self.send(200, got[0], got[1], cache="private, max-age=3600")
         if url.path == "/api/task":
             try:
                 wt = int((q.get("wt") or ["-1"])[0])

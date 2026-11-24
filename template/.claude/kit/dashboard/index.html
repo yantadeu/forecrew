@@ -24,7 +24,7 @@
   #side-filter { margin:0 10px 6px; width:auto }
   .popover[hidden] { display:none } .popover { margin:0 10px 8px; background:var(--card); border:1px solid var(--line); border-radius:4px; padding:8px; display:grid; gap:6px; font-size:12px }
   #side-grip { position:absolute; top:0; right:-3px; width:6px; height:100%; cursor:col-resize; z-index:2 } #side-grip:focus { outline:2px solid var(--accent) }
-  aside { position:sticky } .app.rail aside { width:44px } .app.rail aside .side-h, .app.rail #side-filter, .app.rail #side-gear, .app.rail #merge-box, .app.rail .credit, .app.rail #side-pop, .app.rail #side-grip { display:none }
+  aside { position:sticky } .app.rail aside { width:44px } .app.rail aside .side-h, .app.rail #side-filter, .app.rail #side-gear, .app.rail #side-fork, .app.rail #fork-pop, .app.rail #merge-box, .app.rail .credit, .app.rail #side-pop, .app.rail #side-grip { display:none }
   .app.rail .task .id, .app.rail .task .ttl, .app.rail .task .part, .app.rail .task .badge, .app.rail .task .sub, .app.rail .wt, .app.rail .done-h { display:none }
   .app.rail .task { padding:6px 0; text-align:center } .app.rail .side-top { padding:0 0 8px; justify-content:center }
   .sdot { display:inline-block; width:9px; height:9px; border-radius:50%; border:2px solid var(--mute); flex:none }
@@ -286,6 +286,68 @@
   .turn-msg { white-space:pre-wrap; overflow-wrap:anywhere; max-height:260px; overflow:auto; margin-top:6px; padding:6px 8px; background:var(--bg); border:1px solid var(--line); border-radius:3px; font-size:12px }
   .dismiss { float:right; border:0; background:none; color:var(--mute); font-size:16px; line-height:1; padding:0 4px } .dismiss:hover { color:var(--fg) }
   .dismissed { margin-top:8px } .dismissed > summary { font-size:12px } .dismissed .alert { opacity:.7; margin-top:6px }
+
+  /* What a stage handed over (digest), its screenshots and the lightbox, the hand-off toasts. */
+  .digest { margin:2px 0 6px 30px; padding:6px 10px 6px 12px; border-left:2px solid var(--role, var(--line)); border-radius:0 8px 8px 0; background:linear-gradient(90deg, color-mix(in srgb, var(--role, var(--line)) 12%, transparent), transparent 75%); display:grid; gap:2px; font-size:12px; animation:rise .4s ease-out }
+  .digest .dl { overflow-wrap:anywhere; color:var(--mute) } .digest .dl:first-child { color:var(--fg) }
+  .acchip { justify-self:start; margin-top:3px; font-size:10px; font-weight:700; letter-spacing:.04em; border:1px solid currentColor; border-radius:9px; padding:0 8px }
+  .acchip.full { color:var(--ok) } .acchip.part { color:var(--warn) } .pop .digest { margin:8px 0 0 } .pop .shots { margin:8px 0 0 }
+  .camchip { font-size:10px; color:var(--run); border:1px solid var(--run); border-radius:9px; padding:0 6px; white-space:nowrap }
+  .shots { display:flex; gap:10px; overflow-x:auto; padding:4px 2px 10px; margin:2px 0 6px 30px; scroll-snap-type:x proximity }
+  .shot { position:relative; flex:none; width:156px; height:100px; padding:0; border-radius:10px; overflow:hidden; border:1px solid var(--line); background:var(--floor); scroll-snap-align:start; transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease; animation:rise .4s ease-out }
+  .shot img { width:100%; height:100%; object-fit:cover; display:block; transition:transform .35s ease }
+  .shot:hover, .shot:focus-visible { transform:translateY(-3px); border-color:var(--accent); box-shadow:var(--glow); outline:none } .shot:hover img { transform:scale(1.06) }
+  .shot .cap { position:absolute; left:0; right:0; bottom:0; padding:18px 8px 5px; font-size:10px; color:#fff; text-align:left; background:linear-gradient(transparent, rgba(0,0,0,.82)); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  #lightbox { width:min(1180px,96vw); max-width:96vw; max-height:94vh; padding:0; background:#04070d; color:#e6edf6; border:1px solid #1e2738; border-radius:14px; overflow:hidden }
+  #lightbox::backdrop { background:rgba(2,4,9,.8); backdrop-filter:blur(6px) } #lightbox figure { margin:0 }
+  .lb-stage { position:relative; display:grid; place-items:center; min-height:240px; background:repeating-conic-gradient(#0b1020 0 25%, #0e1428 0 50%) 0 0/24px 24px }
+  .lb-stage img { max-width:100%; max-height:78vh; display:block; animation:zoomin .25s ease-out }
+  .lb-nav, .lb-close { position:absolute; border:1px solid rgba(255,255,255,.18); background:rgba(5,8,15,.65); color:#fff; border-radius:50%; width:40px; height:40px; padding:0; font-size:22px; line-height:1; backdrop-filter:blur(4px) }
+  .lb-nav { top:50%; transform:translateY(-50%) } .lb-nav.prev { left:12px } .lb-nav.next { right:12px } .lb-close { top:12px; right:12px; font-size:20px }
+  .lb-nav:hover, .lb-close:hover { border-color:var(--accent); color:var(--accent) }
+  #lightbox figcaption { display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; padding:12px 16px; border-top:1px solid #1e2738; font-size:12px } .lb-count { margin-left:auto }
+  #toasts { position:fixed; right:18px; bottom:18px; z-index:30; display:grid; gap:10px; width:min(380px, calc(100vw - 36px)); pointer-events:none }
+  .toast { pointer-events:auto; position:relative; overflow:hidden; display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:12px; align-items:start; background:var(--card); border:1px solid var(--line); border-left:3px solid var(--role); border-radius:12px; padding:12px 12px 14px; box-shadow:0 16px 40px rgba(0,0,0,.4), 0 0 0 1px color-mix(in srgb, var(--role) 20%, transparent); animation:toastin .4s cubic-bezier(.2,.9,.3,1.25) }
+  .toast.out { animation:toastout .3s ease-in forwards }
+  .toast .tx { display:grid; gap:2px; min-width:0 } .toast .tl { font-size:12px; color:var(--mute); overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden }
+  .toast .see { justify-self:start; margin-top:6px; font-size:11px; padding:2px 10px; border-radius:999px }
+  .toast .bar { position:absolute; left:0; bottom:0; height:2px; width:100%; background:var(--role); transform-origin:left; animation:drain 9s linear forwards; opacity:.7 } .toast.hold .bar { animation-play-state:paused }
+  .flash { animation:flash 1.6s ease-out }
+  @keyframes rise { from { opacity:0; transform:translateY(-4px) } }
+  @keyframes zoomin { from { opacity:0; transform:scale(.97) } }
+  @keyframes toastin { from { opacity:0; transform:translateX(30px) scale(.95) } }
+  @keyframes toastout { to { opacity:0; transform:translateX(30px) } }
+  @keyframes drain { to { transform:scaleX(0) } }
+  @keyframes flash { 0%, 30% { background:color-mix(in srgb, var(--accent) 28%, transparent) } }
+  /* A parallel task (work.sh fork), and the catalog of specialists. */
+  #side-fork svg { vertical-align:-3px } #fork-pop label { display:grid; gap:2px; font-size:11px; color:var(--mute) } #fork-pop input { width:100% }
+  .fork-h { display:flex; gap:8px; align-items:center; color:var(--accent) }
+  .hire { display:grid; gap:10px; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)) }
+  .hire-card { display:grid; gap:8px; align-content:start; background:linear-gradient(160deg, color-mix(in srgb, var(--role) 10%, var(--card)), var(--card) 60%); border:1px solid var(--line); border-radius:12px; padding:12px; transition:border-color .2s, box-shadow .2s, transform .2s }
+  .hire-card:hover { border-color:var(--role); box-shadow:0 10px 28px color-mix(in srgb, var(--role) 18%, transparent); transform:translateY(-2px) }
+  .hire-card .bot { transition:transform .3s cubic-bezier(.2,.9,.3,1.4) } .hire-card:hover .bot { transform:translateY(-3px) rotate(-6deg) }
+  .hc-top { display:flex; gap:10px; align-items:center } .hc-name { display:grid; min-width:0 } .hc-on { margin-left:auto; font-size:11px; color:var(--ok); white-space:nowrap }
+  .hc-pitch { font-size:12px; color:var(--mute) } .hire-card.on { opacity:.75 }
+  .hire-card .cmd, #fork-pop .cmd { margin:0; flex-wrap:wrap } .hire-card .cmd .k, #fork-pop .cmd .k { flex:1 1 100% }
+  /* Tokens and cost: stat tiles and one-hue bar lists, values in text colors. */
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin:8px 0 14px }
+  .tile { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; display:grid; gap:2px; min-width:0 }
+  .tile .tk { font-size:10px; text-transform:uppercase; letter-spacing:.12em; color:var(--mute) }
+  .tile .tv.name { font-size:14px; line-height:1.35 }
+  .tile .tv { font-size:22px; font-weight:700; color:var(--fg); font-variant-numeric:tabular-nums; line-height:1.2; overflow-wrap:anywhere }
+  .sub-h { font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--mute); margin:14px 0 6px; font-weight:600 }
+  .bars { display:grid; gap:2px }
+  .brow { display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:4px 10px; align-items:center; padding:5px 6px; border-radius:6px; font-size:12px }
+  .brow .bt { grid-column:1 / -1; grid-row:2 } .brow .bv { grid-column:2; grid-row:1 }
+  .brow[data-go-task] { cursor:pointer } .brow:hover, .brow:focus-visible { background:var(--sel); outline:none }
+  .brow .bl { display:flex; gap:6px; align-items:center; min-width:0; white-space:nowrap; overflow:hidden } .brow .bl > span { overflow:hidden; text-overflow:ellipsis }
+  .brow .bt { height:8px; position:relative; background:color-mix(in srgb, var(--line) 45%, transparent); border-radius:0 4px 4px 0 } .brow .bt i { position:absolute; top:0; bottom:0; left:0; background:var(--run); border-radius:0 4px 4px 0; opacity:.7 }
+  .brow.here .bt i { opacity:1 } .brow .bv { font-variant-numeric:tabular-nums; white-space:nowrap; text-align:right }
+  .brow .bl > .tag-here { flex:none; overflow:visible }
+  .tag-here { font-size:10px; font-weight:700; color:#111; background:var(--accent); border-radius:3px; padding:0 5px; margin-left:4px }
+  table.mix { width:auto } table.mix th { font-weight:400; color:var(--mute); text-align:left; font-size:11px; padding:2px 14px 2px 0 } table.mix td { font-variant-numeric:tabular-nums; border:0; padding:2px 14px 2px 0; font-size:13px }
+  .usage-note { margin-top:10px }
+  @media (prefers-reduced-motion: reduce) { .digest, .shot, .shot img, .toast, .toast.out, .toast .bar, .flash, .lb-stage img, .hire-card, .hire-card .bot { animation:none !important; transition:none !important } }
 </style>
 </head>
 <body>
@@ -304,8 +366,9 @@
   </div>
 </div></header>
 <div class="body">
-<aside id="side"><div class="side-top"><span class="side-h" data-i18n="side.tasks">Tasks</span><button type="button" id="side-gear" class="icon" aria-expanded="false" aria-controls="side-pop"></button><button type="button" id="side-collapse" class="icon"></button></div>
+<aside id="side"><div class="side-top"><span class="side-h" data-i18n="side.tasks">Tasks</span><button type="button" id="side-fork" class="icon" aria-expanded="false" aria-controls="fork-pop"><svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="4" cy="3.5" r="1.8"/><circle cx="4" cy="12.5" r="1.8"/><circle cx="12" cy="5.5" r="1.8"/><path d="M4 5.3v5.4M12 7.3c0 3-8 1.5-8 3.4"/></svg></button><button type="button" id="side-gear" class="icon" aria-expanded="false" aria-controls="side-pop"></button><button type="button" id="side-collapse" class="icon"></button></div>
 <div id="side-pop" class="popover" hidden></div>
+<div id="fork-pop" class="popover" hidden></div>
 <input type="search" id="side-filter" autocomplete="off">
 <div id="tasks"><div class="meta" style="padding:0 14px" data-i18n="loading">Loading…</div></div>
 <details id="merge-box" hidden><summary id="merge-sum"></summary><div id="merge"></div></details>
@@ -327,18 +390,20 @@
 </div>
 </section>
 <div class="meta" id="legend" style="margin-top:8px"></div>
-<div class="tabs"><button type="button" data-tab="tree" data-i18n="tab.tree">Steps</button><button type="button" data-tab="office" data-i18n="tab.office">Office</button></div>
+<div class="tabs"><button type="button" data-tab="tree" data-i18n="tab.tree">Steps</button><button type="button" data-tab="office" data-i18n="tab.office">Office</button><button type="button" data-tab="cost" data-i18n="tab.cost">Costs</button></div>
 <div id="pane-task">
 <h1 id="title">Forecrew</h1>
 <div class="where" id="where"></div>
 <div id="now"></div>
 <div id="body" hidden>
 <div id="tree"></div>
+<h2 data-i18n="h.usage">Tokens and cost</h2><div id="usage"></div>
 <h2 data-i18n="h.rulings">Decisions taken without you</h2><div class="rulings" id="rulings"></div>
 <details id="events"><summary id="events-sum"></summary><table id="feed"></table></details>
 </div>
 </div>
-<div id="pane-crew" hidden><div id="pop"></div><h3 class="crew-h" data-i18n="h.crew">Crew</h3><div id="crew-list"></div></div>
+<div id="pane-crew" hidden><div id="pop"></div><h3 class="crew-h" data-i18n="h.crew">Crew</h3><div id="crew-list"></div><h3 class="crew-h" id="hire-h" data-i18n="h.hire" hidden>Hire a specialist</h3><div id="hire" class="hire"></div></div>
+<div id="pane-cost" hidden><div id="cost"></div></div>
 <a class="credit" href="https://github.com/yantadeu/forecrew" target="_blank" rel="noopener" data-i18n="brand.credit">Forecrew by Yan Tadeu · Apache-2.0</a>
 </section>
 </div>
@@ -346,6 +411,8 @@
 </div>
 </div>
 <dialog id="dlg"></dialog>
+<dialog id="lightbox" aria-label="Screenshot"></dialog>
+<div id="toasts" aria-live="polite"></div>
 <script>
 // Every user-facing text of the page, in English and Portuguese. Strict JSON between the markers:
 // test_page.py parses it. Code, statuses and API values stay English; what the dev reads goes
@@ -806,7 +873,54 @@ const I18N = /* i18n:begin */{
   "menu.title": "Settings: language, theme, sound and notifications",
   "status.triage": "Triage",
   "status.triage.m": "The session is in the triage: it asks the lane and the interview before the task's purpose is written.",
-  "tl.triage": "triage"
+  "tl.triage": "triage",
+  "tab.cost": "Costs",
+  "h.usage": "Tokens and cost",
+  "h.hire": "Hire a specialist",
+  "usage.cost": "API-equivalent cost",
+  "usage.tokens": "Tokens",
+  "usage.cache": "Read from cache",
+  "usage.top": "Spent the most",
+  "usage.share": "{p}% of the cost",
+  "usage.runs": "{n} run(s)",
+  "usage.by": "By agent",
+  "usage.mix": "Token mix",
+  "usage.in": "Input",
+  "usage.out": "Output",
+  "usage.cw": "Cache write",
+  "usage.cr": "Cache read",
+  "usage.none": "No token use recorded for this task yet. The hooks record it as each agent finishes; a task that ran before this version of the kit has none.",
+  "usage.note": "At Anthropic's list price per model: what the same tokens would cost on the API (a subscription pays differently). The main session counts its replies inside the task's time window, an estimate.",
+  "usage.unpriced": "No price for {models}: add it under \"pricing\" in flow.json.",
+  "cost.title": "Cost per task",
+  "cost.total": "All tasks",
+  "cost.avg": "Per task, on average",
+  "cost.count": "Tasks measured",
+  "cost.where": "Where it goes, all tasks",
+  "cost.onscreen": "on screen",
+  "cost.empty": "No task has recorded token use yet.",
+  "cost.loading": "Reading the transcripts…",
+  "digest.acs": "AC {n}/{total} cited",
+  "shots.n": "{n} screenshot(s)",
+  "lb.title": "Screenshot",
+  "lb.prev": "Previous",
+  "lb.next": "Next",
+  "lb.close": "Close",
+  "lb.count": "{i} of {n}",
+  "lb.uncited": "cited by no stage",
+  "toast.handed": "{agent} handed over {file}",
+  "toast.see": "See in Steps",
+  "toast.close": "Dismiss",
+  "fork.button": "Start a parallel task in a new worktree",
+  "fork.title": "Parallel task",
+  "fork.what": "A new worktree next to this checkout, on its own branch, with its own session: it works there while this one goes on. The dashboard lists it by itself.",
+  "fork.id": "Task ID",
+  "fork.from": "From (branch, tag or commit; empty: HEAD)",
+  "fork.bad": "The ID takes letters, digits, . _ and -, starting with a letter or digit; From cannot start with -.",
+  "fork.back": "When it is done, clean up its task here: the worktree goes with it.",
+  "hire.lens": "review lens",
+  "hire.on": "on the crew",
+  "cmd.session": "In a Claude Code session:"
  },
  "pt": {
   "lang.button": "PT / EN",
@@ -1263,7 +1377,54 @@ const I18N = /* i18n:begin */{
   "menu.title": "Ajustes: idioma, tema, som e notificações",
   "status.triage": "Triagem",
   "status.triage.m": "A sessão está na triagem: pergunta a trilha e faz a entrevista antes de escrever o propósito da tarefa.",
-  "tl.triage": "triagem"
+  "tl.triage": "triagem",
+  "tab.cost": "Custos",
+  "h.usage": "Tokens e custo",
+  "h.hire": "Contrate um especialista",
+  "usage.cost": "Custo equivalente na API",
+  "usage.tokens": "Tokens",
+  "usage.cache": "Lido do cache",
+  "usage.top": "Quem mais gastou",
+  "usage.share": "{p}% do custo",
+  "usage.runs": "{n} execução(ões)",
+  "usage.by": "Por agente",
+  "usage.mix": "Composição dos tokens",
+  "usage.in": "Entrada",
+  "usage.out": "Saída",
+  "usage.cw": "Escrita no cache",
+  "usage.cr": "Leitura do cache",
+  "usage.none": "Nenhum uso de tokens registrado nesta tarefa ainda. Os hooks registram quando cada agente termina; uma tarefa que rodou antes desta versão do kit não tem.",
+  "usage.note": "Pelo preço de tabela da Anthropic por modelo: quanto os mesmos tokens custariam na API (uma assinatura paga de outro jeito). A sessão principal conta as respostas dentro da janela de tempo da tarefa, uma estimativa.",
+  "usage.unpriced": "Sem preço para {models}: adicione em \"pricing\" no flow.json.",
+  "cost.title": "Custo por tarefa",
+  "cost.total": "Todas as tarefas",
+  "cost.avg": "Por tarefa, em média",
+  "cost.count": "Tarefas medidas",
+  "cost.where": "Para onde vai, todas as tarefas",
+  "cost.onscreen": "na tela",
+  "cost.empty": "Nenhuma tarefa registrou uso de tokens ainda.",
+  "cost.loading": "Lendo as transcrições…",
+  "digest.acs": "AC {n}/{total} citados",
+  "shots.n": "{n} captura(s)",
+  "lb.title": "Captura de tela",
+  "lb.prev": "Anterior",
+  "lb.next": "Próxima",
+  "lb.close": "Fechar",
+  "lb.count": "{i} de {n}",
+  "lb.uncited": "nenhum estágio cita",
+  "toast.handed": "{agent} entregou {file}",
+  "toast.see": "Ver nos Passos",
+  "toast.close": "Dispensar",
+  "fork.button": "Abrir uma frente paralela num worktree novo",
+  "fork.title": "Frente paralela",
+  "fork.what": "Um worktree novo ao lado deste checkout, na sua própria branch, com a sua própria sessão: ela trabalha lá enquanto esta segue. O dashboard lista ela sozinha.",
+  "fork.id": "ID da tarefa",
+  "fork.from": "A partir de (branch, tag ou commit; vazio: HEAD)",
+  "fork.bad": "O ID aceita letras, dígitos, . _ e -, começando por letra ou dígito; A partir de não pode começar com -.",
+  "fork.back": "Quando terminar, limpe a tarefa aqui: o worktree vai junto.",
+  "hire.lens": "lente de revisão",
+  "hire.on": "na equipe",
+  "cmd.session": "Numa sessão do Claude Code:"
  }
 }/* i18n:end */;
 // Statuses dashboard.py returns by name; any other status is the agent of the last stage written.
@@ -1312,7 +1473,7 @@ function cmdText(command) {
     return 'claude "' + words.replace("{id}", msg.slice(hit[0].length)).replace(/["$`\\]/g, "\\$&") + '"';
   }));
 }
-const cmdBlock = (command) => command ? `<div class="cmd"><span class="k">${t("cmd.shell")}</span><code>${cmdText(command)}</code><button type="button" data-copy>${t("copy")}</button></div>` : "";
+const cmdBlock = (command, label = "cmd.shell") => command ? `<div class="cmd"><span class="k">${t(label)}</span><code>${cmdText(command)}</code><button type="button" data-copy>${t("copy")}</button></div>` : "";
 const sessionCmd = (path, key, id) => `cd ${q(path)} && claude ${q((I18N.en[key] || "").replace("{id}", id))}`;
 // Assigning the same HTML again would drop a selection, a half-typed answer or an open <details>.
 const setHTML = (el, html) => { if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html } };
@@ -1356,8 +1517,7 @@ const EMBLEMS = { doc: ROLES.refiner[1], wrench: ROLES.executor[1], check: ROLES
   gear: "M6 3.5v1M6 7.5v1M3.5 6h1M7.5 6h1M6 4.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3z", gauge: "M2.5 8a3.5 3.5 0 1 1 7 0M6 8l2-2.5",
   lock: "M3.5 5.5h5v4h-5zM4.5 5.5V4a1.5 1.5 0 0 1 3 0v1.5", db: "M3 3.5c0-1 6-1 6 0v5c0 1-6 1-6 0zM3 3.5c0 1 6 1 6 0M3 6c0 1 6 1 6 0",
   globe: "M6 2a4 4 0 1 0 0 8a4 4 0 1 0 0-8zM2 6h8M6 2c-1.5 1.2-1.5 6.8 0 8M6 2c1.5 1.2 1.5 6.8 0 8", chart: "M2.5 9.5h7M3.5 9V6.5M6 9V4M8.5 9V5.5" };
-function robot(role, state, size) {
-  const cfg = agentCfg(role);
+function robot(role, state, size, cfg = agentCfg(role)) {
   const [color, emblem] = ROLES[role] || [/^#[0-9a-fA-F]{3,8}$/.test(cfg.color || "") ? cfg.color : "#8b98ad", EMBLEMS[cfg.emblem] || ""];
   const st = ["running", "ok", "failed", "blocked", "stale"].includes(state) ? state : "idle";
   const eyes = st === "ok" ? '<path d="M11 21.5q2-2.4 4 0M21 21.5q2-2.4 4 0" class="eye-line"/>'
@@ -1401,6 +1561,9 @@ function applyLang() {
   $("menu-btn").textContent = "⚙"; $("menu-btn").title = t("menu.title"); $("menu-btn").setAttribute("aria-label", t("menu.title"));
   $("side-filter").placeholder = t("side.filter"); $("side-filter").setAttribute("aria-label", t("side.filter"));
   $("side-grip").setAttribute("aria-label", t("side.grip")); $("side-gear").textContent = "⚙"; $("side-gear").title = t("side.gear"); $("side-gear").setAttribute("aria-label", t("side.gear"));
+  $("side-fork").title = t("fork.button"); $("side-fork").setAttribute("aria-label", t("fork.button"));
+  $("lightbox").setAttribute("aria-label", t("lb.title"));
+  forkPop(); renderHire();
   applySide();
   notifyState(); muteLabel(); applyTheme(); liveLabel();
 }
@@ -1495,7 +1658,8 @@ function selectProject(i) {
 }
 async function render() {
   await loadProjects();
-  const [tasks, attn, flow, wts] = await Promise.all([getJSON("api/tasks"), getJSON("api/attention?visible=" + (document.visibilityState === "hidden" ? "0" : "1")), getJSON("flow.json"), getJSON("api/worktrees")]);
+  const [tasks, attn, flow, wts, cat] = await Promise.all([getJSON("api/tasks"), getJSON("api/attention?visible=" + (document.visibilityState === "hidden" ? "0" : "1")), getJSON("flow.json"), getJSON("api/worktrees"), getJSON("api/specialists").catch(() => null)]);
+  specs = Array.isArray(cat) ? cat : [];
   wtInfo = Array.isArray(wts) ? wts : [];
   flowCfg = flow && typeof flow === "object" ? flow : {};
   // A server started before the alerts existed answers 404 here: that is not "no alert".
@@ -1533,6 +1697,8 @@ async function render() {
   const waitingN = groups.reduce((n, g) => n + pending(g.wt), 0);
   setHTML($("task-pick"), `<span class="pick">${cur ? `<b>${esc(cur.id)}</b> · ${esc(cur.title || cur.wtName)}` : t("pick.none")}</span>${cur ? statusBadge(shown(cur)) : ""}${waitingN ? `<span class="badge">${waitingN}</span>` : ""}`);
   await showTask();
+  renderHire();
+  loadUsage(false);
 }
 
 // The sidebar navigates: one row per task, a status dot, the id, the title, "part k/N" and at most
@@ -1631,6 +1797,7 @@ function disclosure(btn, pop) {
   pop.addEventListener("focusout", (e) => { if (!pop.contains(e.relatedTarget) && e.relatedTarget !== btn && !$("dlg").open) close(false) });
 }
 disclosure($("side-gear"), $("side-pop"));
+disclosure($("side-fork"), $("fork-pop"));
 // The top bar is the brand, the live dot and one menu: language, theme, sound and notifications.
 disclosure($("menu-btn"), $("menu"));
 // The sidebar resizes from its edge (drag, or the arrow keys on the grip), 200 to 520 px and never
@@ -2008,6 +2175,8 @@ async function showTask() {
   showNow(d, list, now);
   showTree(d, list, now);
   showOffice(d, list, now);
+  showUsage(d);
+  handoffs(d);
   setHTML($("rulings"), (d.rulings || []).length ? d.rulings.slice(-12).map(rulingHTML).join("") : `<div class="meta">${t("rulings.none")}</div>`);
   const evs = d.events.slice(-40).reverse();
   $("events-sum").innerHTML = t("h.events", { n: evs.length });
@@ -2163,11 +2332,13 @@ async function tellDecided(d, wt, ok) {
 // file under it when the dev opens it. The node the task is at says "you are here".
 // The world is always on screen ("office"); the side panel shows the task ("tree") or the crew.
 let tab = "office", pane = "tree";
-try { pane = localStorage.getItem("agent-flow-tab") === "office" ? "office" : "tree" } catch (e) {}
+try { const v = localStorage.getItem("agent-flow-tab"); pane = v === "office" || v === "cost" ? v : "tree" } catch (e) {}
 function setTab(name) {
   pane = name;
   try { localStorage.setItem("agent-flow-tab", pane) } catch (e) {}
-  $("pane-task").hidden = pane !== "tree"; $("pane-crew").hidden = pane !== "office";
+  $("pane-task").hidden = pane !== "tree"; $("pane-crew").hidden = pane !== "office"; $("pane-cost").hidden = pane !== "cost";
+  // After the script has run: the cost view's state is declared further down.
+  if (pane === "cost") setTimeout(() => loadUsage(true));
   document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === pane));
 }
 setTab(pane);
@@ -2184,12 +2355,12 @@ function showTree(d, list, now) {
     const here = i === now ? `<span class="you">${t("tree.here")}</span>` : "";
     let kids = "";
     if (st.key === "purpose" && openNodes.has("purpose")) kids = `<pre class="file">${esc(purposeText(d))}</pre>`;
-    if (st.stage) kids = fileOf(st.stage);
+    if (st.stage) kids = (st.stage.written && !openNodes.has(st.stage.file) ? digestHTML(st.stage, d) : "") + shotsHTML(d, st.stage.file) + fileOf(st.stage);
     if (st.key === "reviews") kids = `<ul>${st.lenses.map(s => {
       const lane = lanes[s.agent], v = s.verdict;
       const vc = v === "FAIL" ? "bad" : v === "PASS_WITH_FINDINGS" ? "warn" : v ? "ok" : lane && lane.state === "running" ? "run" : "todo";
       const fs = (d.findings || []).filter(x => x.lens === lensOf(s));
-      return `<li class="node ${vc}"><div class="row" data-node="${esc(s.file)}">${robot(s.agent, v === "FAIL" ? "failed" : v ? "ok" : lane ? lane.state : "idle", 22)}<b>${esc(roleName(s.agent))}</b><span class="meta">${s.na ? t("verdict.na") : v ? esc(verdictName(v)) : lane ? t("lane.state." + (lane.state || "idle")) : t("tree.waiting")}</span>${fs.length ? `<span class="count">${fs.length}</span>` : ""}</div>${fileOf(s)}${fs.length ? `<div class="kids">${fs.map(findingRow).join("")}</div>` : ""}</li>`;
+      return `<li class="node ${vc}"><div class="row" data-node="${esc(s.file)}">${robot(s.agent, v === "FAIL" ? "failed" : v ? "ok" : lane ? lane.state : "idle", 22)}<b>${esc(roleName(s.agent))}</b><span class="meta">${s.na ? t("verdict.na") : v ? esc(verdictName(v)) : lane ? t("lane.state." + (lane.state || "idle")) : t("tree.waiting")}</span>${fs.length ? `<span class="count">${fs.length}</span>` : ""}${camChip(d, s.file)}</div>${!fs.length && s.written && !openNodes.has(s.file) ? digestHTML(s, d) : ""}${shotsHTML(d, s.file)}${fileOf(s)}${fs.length ? `<div class="kids">${fs.map(findingRow).join("")}</div>` : ""}</li>`;
     }).join("")}</ul>`;
     if (st.key === "decision") {
       const c = d.findings_counts || {};
@@ -2199,7 +2370,7 @@ function showTree(d, list, now) {
       if (bar) kids += `<div class="kids">${bar}</div>`;
     }
     const clickable = st.stage || st.key === "purpose";
-    return `<li class="node ${cls}"><div class="row${clickable ? " click" : ""}"${clickable ? ` data-node="${esc(st.stage ? st.stage.file : "purpose")}"` : ""}><span class="g">${glyph(cls)}</span>${st.role ? robot(st.role, st.ok ? "ok" : i === now ? "running" : "idle", 22) : ""}<b>${st.label}</b>${st.role && st.role !== "foreman" && st.role !== "main" ? `<span class="meta">${esc(roleName(st.role))}</span>` : ""}${here}</div>${kids}</li>`;
+    return `<li class="node ${cls}"><div class="row${clickable ? " click" : ""}"${clickable ? ` data-node="${esc(st.stage ? st.stage.file : "purpose")}"` : ""}><span class="g">${glyph(cls)}</span>${st.role ? robot(st.role, st.ok ? "ok" : i === now ? "running" : "idle", 22) : ""}<b>${st.label}</b>${st.role && st.role !== "foreman" && st.role !== "main" ? `<span class="meta">${esc(roleName(st.role))}</span>` : ""}${st.stage ? camChip(d, st.stage.file) : ""}${here}</div>${kids}</li>`;
   }).join("");
   setHTML($("tree"), `<ul class="tree">${nodes}</ul>`);
   $("tree").querySelectorAll("[data-node]").forEach(r => r.onclick = (ev) => {
@@ -2209,6 +2380,7 @@ function showTree(d, list, now) {
     showTree(d, list, now);
   });
   wireFindings($("tree"), d);
+  wireShots($("tree"), d);
   if (pendingScroll) {
     pendingScroll = false;
     const f = $("tree").querySelector(".finding.needs-you");
@@ -2817,7 +2989,7 @@ function showPop(d, lanes) {
   const state = lane ? lane.state || "idle" : st && st.written ? "ok" : "idle";
   const when = lane ? (lane.end ? t("lane.took", { s: Math.round(lane.end - lane.start) }) : t("lane.since", { ago: ago(lane.start) })) : "";
   let html = `<div class="pop"><button type="button" class="dismiss" data-close-pop title="${esc(t("pop.close"))}">×</button><div class="head">${avatarImg(openBot, 48)}<div><b>${esc(openBot === "main" ? t("office.foreman") : roleName(openBot))}</b><div class="meta">${has("lane.state." + state) ? t("lane.state." + state) : esc(state)}<span data-when></span></div></div></div>`;
-  if (st) html += `<div class="meta">${t("pop.file", { file: st.file })}${st.verdict ? " · " + esc(verdictName(st.verdict)) : ""}</div>`;
+  if (st) html += `<div class="meta">${t("pop.file", { file: st.file })}${st.verdict ? " · " + esc(verdictName(st.verdict)) : ""}</div>` + digestHTML(st, d) + shotsHTML(d, st.file);
   if (lane && lane.last) html += `<details><summary>${t("lane.more")}</summary><div class="meta" data-laneid></div><div class="detail">${esc(lane.last)}</div></details>`;
   if (lane && lane.summary) html += `<div class="detail">${esc(lane.summary)}</div>`;
   if (hand && hand.kind === "alert" && openBot === "main" && hand.alert.kind === "turn") html += `<div class="meta" style="margin-top:8px">${HAND(16)} ${t("pop.chat")}</div>`;
@@ -2825,7 +2997,7 @@ function showPop(d, lanes) {
   else if (hand) html += `<div class="warn">${t("pop.blocked")}</div>`;
   else if (!lane) html += `<div class="meta">${t("pop.idle")}</div>`;
   html += "</div>";
-  if (pop.dataset.html !== html) { pop.innerHTML = html; pop.dataset.html = html; if (hand && hand.kind === "alert" && !(openBot === "main" && hand.alert.kind === "turn")) wireAlerts(pop, [hand.alert], "p") }
+  if (pop.dataset.html !== html) { pop.innerHTML = html; pop.dataset.html = html; wireShots(pop, d); if (hand && hand.kind === "alert" && !(openBot === "main" && hand.alert.kind === "turn")) wireAlerts(pop, [hand.alert], "p") }
   // Filled after the redraw check: they change every tick, and a redraw would wipe what the dev
   // was marking in the card's question.
   const w = pop.querySelector("[data-when]"); if (w) w.textContent = when ? " · " + when : "";
@@ -2853,6 +3025,173 @@ function rulingHTML(r) {
   return `<div><b>${esc(parts[0])}</b>${parts.slice(1).map(p => ` · ${label(p)}`).join("")}</div>`;
 }
 
+
+// ---- What a stage handed over: two lines of its file, the criteria it cites, its screenshots.
+const acsOf = (d) => [...new Set(((d.purpose || "").replace(/<!--.*?-->/gs, "").match(/\bAC-\d+\b/g) || []))];
+function digestHTML(s, d) {
+  const g = s && s.digest;
+  if (!g || !(g.lines || []).length) return "";
+  const need = acsOf(d), covers = ((flowCfg.stages || {})[s.agent] || {}).covers;
+  const got = need.filter(a => (g.acs || []).includes(a)).length;
+  const chip = covers && need.length ? `<span class="acchip ${got === need.length ? "full" : "part"}">${got === need.length ? "✓" : "!"} ${t("digest.acs", { n: got, total: need.length })}</span>` : "";
+  return `<div class="digest" style="--role:${roleColor(s.agent)}">${g.lines.map(l => `<div class="dl">${esc(l)}</div>`).join("")}${chip}</div>`;
+}
+// Screenshots under <ID>/evidence/: each under the stage file that cites it, the rest under the proof.
+// <img> cannot send a header: the token goes in the URL, which no-referrer keeps on this page.
+const evUrl = (d, x) => scoped(`api/evidence?wt=${sel.wt}&id=${encodeURIComponent(d.id)}&f=${encodeURIComponent(x.name)}&v=${+x.t || 0}`) + "&t=" + encodeURIComponent(TOKEN);
+const proofFile = () => ((flowCfg.stages || {}).tester || {}).file || "03-proof.md";
+const shotsOf = (d, file) => (d.evidence || []).filter(x => x.stage === file || (!x.stage && file === proofFile()));
+const camChip = (d, file) => { const n = shotsOf(d, file).length; return n ? `<span class="camchip" title="${esc(t("shots.n", { n }))}">📷 ${n}</span>` : "" };
+function shotsHTML(d, file) {
+  const xs = shotsOf(d, file);
+  return xs.length ? `<div class="shots">${xs.map(x => `<button type="button" class="shot" data-shot="${esc(x.name)}" data-file="${esc(file)}" title="${esc(x.caption || x.name)}"><img src="${esc(evUrl(d, x))}" alt="${esc(x.caption || x.name)}" loading="lazy"><span class="cap">${esc(x.caption || x.name)}</span></button>`).join("")}</div>` : "";
+}
+function wireShots(box, d) {
+  box.querySelectorAll("[data-shot]").forEach(b => b.onclick = (ev) => { ev.stopPropagation(); openShots(d, b.dataset.file, b.dataset.shot) });
+}
+let lb = null;
+function openShots(d, file, name) {
+  const xs = shotsOf(d, file);
+  if (!xs.length) return;
+  lb = { d, xs, i: Math.max(0, xs.findIndex(x => x.name === name)) };
+  showShot();
+  if (!$("lightbox").open) $("lightbox").showModal();
+}
+function showShot() {
+  const { d, xs, i } = lb, x = xs[i], s = d.stages.find(st => st.file === x.stage);
+  const nav = xs.length > 1 ? `<button type="button" class="lb-nav prev" data-lb="-1" aria-label="${esc(t("lb.prev"))}">‹</button><button type="button" class="lb-nav next" data-lb="1" aria-label="${esc(t("lb.next"))}">›</button>` : "";
+  $("lightbox").innerHTML = `<figure><div class="lb-stage"><img src="${esc(evUrl(d, x))}" alt="${esc(x.caption || x.name)}">${nav}<button type="button" class="lb-close" data-lb-close aria-label="${esc(t("lb.close"))}">×</button></div>` +
+    `<figcaption><b>${esc(x.caption || x.name)}</b><span class="meta">${s ? esc(roleName(s.agent)) + " · " + esc(x.stage) : t("lb.uncited")} · ${esc(x.name)}</span><span class="meta lb-count">${t("lb.count", { i: i + 1, n: xs.length })}</span></figcaption></figure>`;
+  $("lightbox").querySelectorAll("[data-lb]").forEach(b => b.onclick = () => stepShot(+b.dataset.lb));
+  $("lightbox").querySelector("[data-lb-close]").onclick = () => $("lightbox").close();
+}
+const stepShot = (k) => { if (lb && lb.xs.length > 1) { lb.i = (lb.i + k + lb.xs.length) % lb.xs.length; showShot() } };
+$("lightbox").addEventListener("keydown", (e) => { if (e.key === "ArrowRight") stepShot(1); else if (e.key === "ArrowLeft") stepShot(-1) });
+$("lightbox").addEventListener("click", (e) => { if (e.target === $("lightbox")) $("lightbox").close() });
+
+// A stage that lands while the page is open says so in a toast: who, what file, its first line.
+// What is already there when a task first shows is no news.
+const handed = new Map();
+function handoffs(d) {
+  const k = sel.wt + "/" + d.id, seen = handed.get(k), now = new Map();
+  d.stages.forEach(s => { if (s.written && s.digest) now.set(s.file, [s.verdict || s.status || "", ...(s.digest.lines || [])].join("\n")) });
+  handed.set(k, now);
+  if (seen) now.forEach((sig, file) => { if (seen.get(file) !== sig) toast(d, d.stages.find(s => s.file === file)) });
+}
+function toast(d, s) {
+  const box = $("toasts");
+  while (box.children.length >= 3) box.firstChild.remove();
+  const el = document.createElement("div"), v = s.verdict ? verdictName(s.verdict) : "";
+  el.className = "toast"; el.setAttribute("role", "status"); el.style.setProperty("--role", roleColor(s.agent));
+  el.innerHTML = `${avatarImg(s.agent, 36)}<div class="tx"><b>${t("toast.handed", { agent: esc(roleName(s.agent)), file: esc(s.file) })}</b><div class="meta">${esc(d.id)}${v ? " · " + esc(v) : ""}</div><div class="tl">${esc((s.digest.lines || [])[0] || "")}</div><button type="button" class="see">${t("toast.see")}</button></div><button type="button" class="dismiss" aria-label="${esc(t("toast.close"))}">×</button><i class="bar"></i>`;
+  let timer = setTimeout(() => gone(), 9000);
+  const gone = () => { clearTimeout(timer); el.classList.add("out"); setTimeout(() => el.remove(), 300) };
+  el.querySelector(".dismiss").onclick = gone;
+  el.querySelector(".see").onclick = () => {
+    gone(); setTab("tree");
+    const r = $("tree").querySelector(`[data-node="${CSS.escape(s.file)}"]`);
+    if (r) { r.scrollIntoView({ block: "center", behavior: "smooth" }); r.classList.remove("flash"); void r.offsetWidth; r.classList.add("flash") }
+  };
+  el.onmouseenter = () => { clearTimeout(timer); el.classList.add("hold") };
+  el.onmouseleave = () => { el.classList.remove("hold"); timer = setTimeout(gone, 4000) };
+  box.appendChild(el);
+}
+
+// ---- A parallel task: the whole command for a terminal, built as the dev types the ID.
+function forkPop() {
+  setHTML($("fork-pop"), `<div class="fork-h">${$("side-fork").innerHTML}<b>${t("fork.title")}</b></div><div class="meta">${t("fork.what")}</div>` +
+    `<label>${t("fork.id")}<input type="text" id="fork-id" autocomplete="off" spellcheck="false" placeholder="ABC-12"></label>` +
+    `<label>${t("fork.from")}<input type="text" id="fork-from" autocomplete="off" spellcheck="false" placeholder="HEAD"></label><div id="fork-cmd"></div><div class="meta">${t("fork.back")}</div>`);
+  $("fork-id").oninput = $("fork-from").oninput = forkCmd;
+}
+function forkCmd() {
+  const id = $("fork-id").value.trim(), from = $("fork-from").value.trim(), main = (wtInfo[0] || {}).path;
+  if (!id || !main) { setHTML($("fork-cmd"), ""); return }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id) || from.startsWith("-")) { setHTML($("fork-cmd"), `<div class="warn">${t("fork.bad")}</div>`); return }
+  const dest = main.replace(/\/[^/]*$/, "") + "/" + main.split("/").pop() + "-" + id;
+  setHTML($("fork-cmd"), cmdBlock(`cd ${q(main)} && bash .claude/kit/scripts/work.sh fork ${q(id)}${from ? " --from " + q(from) : ""} && cd ${q(dest)} && claude ${q("/task " + id)}`));
+}
+
+// ---- Specialists of the kit's catalog, hired with /flow-agent add <name>.
+let specs = [];
+function renderHire() {
+  if (!$("hire")) return;
+  $("hire-h").hidden = !specs.length;
+  setHTML($("hire"), specs.map(s => {
+    const color = /^#[0-9a-fA-F]{3,8}$/.test(s.color || "") ? s.color : "#8b98ad";
+    return `<div class="hire-card${s.installed ? " on" : ""}" style="--role:${color}"><div class="hc-top">${robot(s.name, s.installed ? "ok" : "idle", 34, { color, emblem: s.emblem })}` +
+      `<span class="hc-name"><b>${esc(pick(s.label) || s.name)}</b><span class="meta">${t("hire.lens")} · ${esc(s.lens || "")}</span></span>${s.installed ? `<span class="hc-on">✓ ${t("hire.on")}</span>` : ""}</div>` +
+      `<div class="hc-pitch">${esc(pick(s.pitch) || "")}</div>${s.installed ? "" : cmdBlock("/flow-agent add " + s.name, "cmd.session")}</div>`;
+  }).join(""));
+}
+
+// ---- Tokens and cost. Stat tiles, then bar lists in one hue: the agent's name and face carry
+// who it is, the value sits at the bar's end in text colors.
+const fmtTok = (n) => n < 1000 ? String(n) : n < 1e6 ? (n / 1e3).toFixed(n < 1e4 ? 1 : 0) + "K" : (n / 1e6).toFixed(n < 1e7 ? 2 : 1) + "M";
+const fmtUsd = (x) => x == null ? "—" : x === 0 ? "$0" : x < 0.01 ? "<$0.01" : "$" + x.toFixed(x < 100 ? 2 : 0);
+const sumTok = (v) => (v || []).reduce((a, b) => a + b, 0);
+const cacheShare = (v) => { const [i, , w, r] = v || [0, 0, 0, 0]; return i + w + r ? r / (i + w + r) : 0 };
+const whoName = (type) => type === "main" ? t("office.foreman") : roleName(type);
+const tokTitle = (v) => [["usage.in", 0], ["usage.out", 1], ["usage.cw", 2], ["usage.cr", 3]].map(([k, i]) => `${t(k)} ${fmtTok((v || [])[i] || 0)}`).join(" · ");
+const tiles = (list) => `<div class="tiles">${list.map(([k, v, sub, name]) => `<div class="tile"><div class="tk">${k}</div><div class="tv${name ? " name" : ""}">${v}</div>${sub ? `<div class="meta">${sub}</div>` : ""}</div>`).join("")}</div>`;
+function barRows(rows) {
+  const max = Math.max(0, ...rows.map(r => r.value)) || 1;
+  return `<div class="bars">${rows.map(r => `<div class="brow${r.here ? " here" : ""}"${r.key ? ` data-go-task="${esc(r.key)}" tabindex="0" role="button"` : ""} title="${esc(r.title)}"><span class="bl">${r.label}</span><span class="bt"><i style="width:${Math.max(1.5, 100 * r.value / max).toFixed(1)}%"></i></span><span class="bv">${r.text}</span></div>`).join("")}</div>`;
+}
+const usageNote = (unpriced) => `<div class="meta usage-note">${t("usage.note")}${unpriced.length ? " " + t("usage.unpriced", { models: esc(unpriced.join(", ")) }) : ""}</div>`;
+function showUsage(d) {
+  const u = d.usage;
+  if (!u || !(u.by || []).length) { setHTML($("usage"), `<div class="meta">${t("usage.none")}</div>`); return }
+  const byCost = u.cost > 0, top = u.by[0];
+  setHTML($("usage"), tiles([
+    [t("usage.cost"), fmtUsd(u.cost), ""], [t("usage.tokens"), fmtTok(sumTok(u.tokens)), ""],
+    [t("usage.cache"), Math.round(100 * cacheShare(u.tokens)) + "%", ""],
+    [t("usage.top"), esc(whoName(top.type)), byCost ? t("usage.share", { p: Math.round(100 * top.cost / u.cost) }) : "", true]]) +
+    `<h3 class="sub-h">${t("usage.by")}</h3>` + barRows(u.by.map(r => ({
+      label: `${avatarImg(r.type, 24)}<span>${esc(whoName(r.type))}<span class="meta"> · ${t("usage.runs", { n: r.runs })}</span></span>`,
+      value: byCost ? r.cost : sumTok(r.tokens), title: tokTitle(r.tokens) + (r.models.length ? " · " + r.models.join(", ") : ""),
+      text: `${fmtUsd(r.cost)} <span class="meta">${fmtTok(sumTok(r.tokens))}</span>` }))) +
+    `<h3 class="sub-h">${t("usage.mix")}</h3><table class="mix"><tr>${["usage.in", "usage.out", "usage.cw", "usage.cr"].map(k => `<th>${t(k)}</th>`).join("")}</tr><tr>${u.tokens.map(n => `<td>${fmtTok(n)}</td>`).join("")}</tr></table>` +
+    usageNote(u.unpriced || []));
+}
+// The project's view: every task's cost, read on the Costs tab only and at most every 15 s.
+let usageAll = null, usageAt = 0;
+async function loadUsage(force) {
+  if (pane !== "cost") return;
+  if (force || Date.now() - usageAt > 15000) {
+    usageAt = Date.now();
+    try { usageAll = await getJSON("api/usage") || [] } catch (e) { usageAll = usageAll || [] }
+  }
+  renderCost();
+}
+function renderCost() {
+  if (usageAll == null) { setHTML($("cost"), `<div class="meta">${t("cost.loading")}</div>`); return }
+  const xs = usageAll.filter(x => sumTok(x.tokens) > 0);
+  if (!xs.length) { setHTML($("cost"), `<div class="meta">${t("cost.empty")}</div>`); return }
+  const total = xs.reduce((a, x) => a + x.cost, 0), tok = xs.reduce((a, x) => a + sumTok(x.tokens), 0), byCost = total > 0;
+  const val = (cost, v) => byCost ? cost : sumTok(v);
+  const where = {};
+  xs.forEach(x => x.by.forEach(r => { const w = where[r.type] || (where[r.type] = { type: r.type, cost: 0, tokens: [0, 0, 0, 0] }); w.cost += r.cost; r.tokens.forEach((n, i) => w.tokens[i] += n) }));
+  const ws = Object.values(where).sort((a, b) => val(b.cost, b.tokens) - val(a.cost, a.tokens));
+  const tasks = xs.slice().sort((a, b) => val(b.cost, b.tokens) - val(a.cost, a.tokens)).slice(0, 30);
+  const unpriced = [...new Set(xs.flatMap(x => x.unpriced || []))];
+  setHTML($("cost"), tiles([
+    [t("cost.total"), fmtUsd(total), fmtTok(tok) + " tokens"], [t("cost.avg"), fmtUsd(total / xs.length), ""],
+    [t("cost.count"), String(xs.length), ""], [t("usage.top"), esc(whoName(ws[0].type)), byCost ? t("usage.share", { p: Math.round(100 * ws[0].cost / total) }) : "", true]]) +
+    `<h3 class="sub-h">${t("cost.title")}</h3>` + barRows(tasks.map(x => {
+      const here = !!sel && sel.wt === x.wt && sel.id === x.id;
+      return { key: x.wt + "/" + x.id, here, value: val(x.cost, x.tokens), title: tokTitle(x.tokens),
+        label: `<span><b>${esc(x.id)}</b> <span class="meta">${esc(x.title || x.worktree)}</span></span>${here ? `<span class="tag-here">${t("cost.onscreen")}</span>` : ""}`,
+        text: `${fmtUsd(x.cost)} <span class="meta">${fmtTok(sumTok(x.tokens))}</span>` };
+    })) +
+    `<h3 class="sub-h">${t("cost.where")}</h3>` + barRows(ws.map(w => ({ value: val(w.cost, w.tokens), title: tokTitle(w.tokens),
+      label: `${avatarImg(w.type, 24)}<span>${esc(whoName(w.type))}</span>`, text: `${fmtUsd(w.cost)} <span class="meta">${fmtTok(sumTok(w.tokens))}</span>` }))) +
+    usageNote(unpriced));
+  $("cost").querySelectorAll("[data-go-task]").forEach(r => {
+    const go = () => { const [w, id] = r.dataset.goTask.split("/"); select(+w, id); setTab("tree") };
+    r.onclick = go; r.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go() } };
+  });
+}
 
 // The worktree's switches: answering questions on the page, and sending the session its next
 // message on the page. Turning one on or off asks first, saying what changes and the risk.

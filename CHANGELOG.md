@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Tokens and cost per task. The hook records what each subagent spent when it stops (from its own
+  transcript, one row per reply) and the main session's id on its tool events; the dashboard adds
+  the main session's replies inside the task's window, found by id under the Claude config
+  directory. The task shows tokens and API-equivalent cost per agent, the token mix and the cache
+  hit rate; a new Costs tab compares every task and shows where the tokens go
+  (`GET /api/usage`). List prices per model are built in; `pricing` in `flow.json` overrides them.
+- Stage digests and hand-off toasts. Every stage carries two lines of its file and the acceptance
+  criteria it cites (`AC 3/3 cited`), in the steps and in the robot's card; a stage that lands
+  while the page is open shows a toast with "See in Steps".
+- Visual evidence. The tester saves screenshots of visual criteria under `.work/<ID>/evidence/`
+  and cites them in the proof; the QA reviewer checks them. The dashboard shows them as a gallery
+  with a lightbox (`GET /api/evidence`: by name only, images only, no links followed, `nosniff`).
+- `work.sh fork <ID> [--from <ref>]`: a parallel task in a new worktree beside the checkout, on its
+  own branch, with the command that opens a session there. The sidebar's branch button builds it.
+- A catalog of specialists (`.claude/kit/specialists/`): performance, accessibility, data
+  migration and API compatibility reviewers, hired with `/flow-agent add <name>` (`/flow-agent
+  catalog` lists them) and shown under "Hire a specialist" in the Crew panel.
+- README reorganized: why, quick start, a tour in GIFs, where it runs (any terminal or
+  orchestrator), features grouped by what you do, then the reference.
+
 - Security: web answers can no longer be forged from inside the project. The holds took any
   `.work/attention/<session>/<agent>.answer.json` with the right `qid` (stored in plain text
   next to it), so any process of the project (an agent's background job, a parallel subagent,

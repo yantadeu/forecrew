@@ -20,6 +20,7 @@ Also the single implementation of the checks the scripts need:
   flow.py page-key        prints the key the dashboard's link carries (?k=)
   flow.py remote-allow [on|off]   Allow of a permission from the page or Telegram (off by default)
 """
+import calendar
 import hashlib
 import json
 import os
@@ -282,6 +283,59 @@ def tool_detail(event):
     return tool_detail_full(event)[:120]
 
 
+def _stamp(value):
+    """Epoch seconds of a transcript's ISO timestamp, 0 when it has none."""
+    try:
+        return float(calendar.timegm(time.strptime(str(value)[:19], "%Y-%m-%dT%H:%M:%S")))
+    except (ValueError, OverflowError):
+        return 0.0
+
+
+def usage_rows(path, offset=0, sidechain=False):
+    """Token usage of each model reply of a Claude Code transcript read from byte `offset`:
+    ({reply id: (time, model, input, output, cache write, cache read)}, offset read up to). A reply
+    written over several lines repeats its usage; the last line wins. A line still being written
+    is left for the next read. In a session's own file, sidechain lines (an older layout that
+    wrote subagents there) are not the session's; a subagent's file is all sidechain."""
+    rows = {}
+    try:
+        with open(path, "rb") as f:
+            f.seek(offset)
+            data = f.read()
+    except OSError:
+        return rows, offset
+    end = data.rfind(b"\n") + 1
+    for line in data[:end].splitlines():
+        if b'"usage"' not in line:
+            continue
+        try:
+            e = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(e, dict) or e.get("type") != "assistant" or bool(e.get("isSidechain")) != sidechain:
+            continue
+        msg = e.get("message")
+        u = msg.get("usage") if isinstance(msg, dict) else None
+        if not isinstance(u, dict) or not isinstance(msg.get("model"), str) or msg["model"].startswith("<"):
+            continue
+        n = lambda k: u[k] if isinstance(u.get(k), int) and u[k] > 0 else 0
+        rows[str(msg.get("id") or e.get("requestId") or e.get("uuid"))] = (
+            _stamp(e.get("timestamp")), msg["model"][:60], n("input_tokens"), n("output_tokens"),
+            n("cache_creation_input_tokens"), n("cache_read_input_tokens"))
+    return rows, offset + end
+
+
+def usage_by_model(rows):
+    """{model: [input, output, cache write, cache read, replies]} of usage_rows' rows."""
+    out = {}
+    for _, model, *tokens in rows:
+        acc = out.setdefault(model, [0, 0, 0, 0, 0])
+        for i, v in enumerate(tokens):
+            acc[i] += v
+        acc[4] += 1
+    return out
+
+
 def in_this_work(event, flow, wid):
     """True when the agent was handed this work directory: a stale `current` must not
     capture an agent launched for something else (a standalone review, an exploration)."""
@@ -518,8 +572,13 @@ def main():
     if name == "SubagentStart":
         log(flow, wid, {"ev": "start", "agent": agent, "type": agent_type})
     elif name == "PreToolUse":
-        log(flow, wid, {"ev": "tool", "agent": agent, "type": agent_type,
-                        "tool": event.get("tool_name"), "detail": tool_detail(event)})
+        entry = {"ev": "tool", "agent": agent, "type": agent_type,
+                 "tool": event.get("tool_name"), "detail": tool_detail(event)}
+        # The main session's id: the dashboard reads its token use from the session's own
+        # transcript, found by id under the Claude config, never by a path written here.
+        if agent == "main" and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", str(event.get("session_id") or "")):
+            entry["session"] = event["session_id"]
+        log(flow, wid, entry)
         inp = event.get("tool_input") or {}
         target = inp.get("subagent_type")
         marker = os.path.basename(work_dir(flow)) + "/" + wid
@@ -537,8 +596,13 @@ def main():
             return 2  # blocks the stop and hands the reason back to the agent
         summary = (event.get("last_assistant_message") or "")[:300]
         # A stop let through on the retry is still a failed stage: `work.sh status` reports it.
-        log(flow, wid, {"ev": "stop", "agent": agent, "type": agent_type,
-                        "gate": "failed" if reason else "ok", "detail": reason or summary})
+        entry = {"ev": "stop", "agent": agent, "type": agent_type,
+                 "gate": "failed" if reason else "ok", "detail": reason or summary}
+        # What the agent spent, from its own transcript: the dashboard's cost per stage.
+        usage = usage_by_model(usage_rows(event.get("agent_transcript_path") or "", sidechain=True)[0].values())
+        if usage:
+            entry["usage"] = usage
+        log(flow, wid, entry)
     return 0
 
 

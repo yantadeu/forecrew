@@ -1,12 +1,12 @@
 ---
 description: Create, move or remove a specialized agent of Forecrew, its room on the site, and its place in the flow - by interviewing the dev
-argument-hint: "[new | move <name> | remove <name> | list]"
+argument-hint: "[catalog | add <name> | new | move <name> | remove <name> | list]"
 ---
 
 # Specialized agents
 
-Input: `$ARGUMENTS`. Without one, ask with `AskUserQuestion`: create a new agent, move one, remove
-one, or list them.
+Input: `$ARGUMENTS`. Without one, ask with `AskUserQuestion`: hire one from the catalog, create a
+new agent, move one, remove one, or list them.
 
 Write every question to the dev in the `language` of `.claude/flow.json`. Show each file you
 will write or change, as a diff, and wait for the dev's "ok" before writing it.
@@ -17,7 +17,34 @@ Print the agents of `.claude/agents/`, and for each one: its place in the flow (
 `stages` in `.claude/flow.json`, with what it requires; a review lens; or outside the flow), its
 room (`rooms`) and its label.
 
+## catalog
+
+Read `.claude/kit/specialists/catalog.json` and list each specialist: its label in the dev's
+language, its pitch, and whether the project already has it (an `agents/<name>.md` or a `stages`
+entry). The dashboard shows the same list under "Hire a specialist" in the Crew panel. Then ask
+with `AskUserQuestion`, `multiSelect`, which to add, and run **add** for each.
+
+## add <name>
+
+A ready specialist from the catalog: no interview for what the catalog already decides.
+
+1. Read its entry in `.claude/kit/specialists/catalog.json` and its file
+   `.claude/kit/specialists/<name>.md`. A name not in the catalog: say so and offer **new**.
+2. Ask only what depends on the project, one round each, with your recommendation first:
+   - **What it reads** (`lenses.<lens>.read`): files of this repository that matter to its
+     specialty (a schema, a design system, an API contract). Look for them first and propose them.
+   - **Room**: the catalog's room, or another of `rooms`.
+3. Show the diff and write, after the dev's ok, exactly what **new** writes for a review lens:
+   the agent file (copied from the catalog, adapted only where the project needs it), the
+   `stages` entry `{"file": "04-review-<lens>.md", "verdict": true, "requires": ["refiner",
+   "executor", "tester"], "sections": ["Findings"]}`, the `lenses` entry with the catalog's
+   `tags`, the room, and `agents.<name>` with the catalog's `label`, `color` and `emblem`.
+4. Run `python3 .claude/kit/scripts/export.py` and `bash .claude/kit/scripts/work.sh status`.
+
 ## new
+
+Before the interview, read the catalog: when the specialty the dev names is one of its entries,
+offer **add** of that entry first.
 
 Interview, one round per question, with your recommendation first:
 
