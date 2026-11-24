@@ -384,7 +384,9 @@ def preferences(page):
     assert 'document.documentElement.lang = lang === "pt" ? "pt-BR" : "en"' in page
     assert "attn === null || TOKEN === PLACEHOLDER" in page and 'const PLACEHOLDER = "__KIT_" + "TOKEN__";' in page
     assert 'new EventSource(scoped("api/events?t=" + encodeURIComponent(TOKEN)))' in page and "startPoll()" in page, "live stream with a poll fallback"
-    assert "const getJSON = async (p) => { const r = await fetch(scoped(p));" in page, "every read names the project on screen"
+    assert "const getJSON = async (p) => { const r = await fetch(scoped(p), { headers: { \"X-Kit-Token\": TOKEN } });" in page, \
+        "every read names the project on screen and carries the page's token"
+    assert '(key ? "&k=" + encodeURIComponent(key) : "")' in page, "switching project keeps the link's key for a reload"
     assert 'path.startsWith("api/projects") ? path' in page and "x.p !== proj && x.pending > (projSeen[x.root] ?? x.pending)" in page, \
         "the project list is not scoped, and another project that starts waiting on the dev chimes"
 
@@ -443,7 +445,9 @@ MUTATIONS = (
     (cleanup_wiring, "plan hash not sent", lambda p: p.replace("plan: cleanPlan.plan })", "plan: null })")),
     (preferences, "theme outside try", lambda p: p.replace('try { theme = ["light", "dark", "system"].includes(localStorage.getItem(THEME_KEY)) ? localStorage.getItem(THEME_KEY) : "dark" } catch (e) {}', 'theme = localStorage.getItem(THEME_KEY);')),
     (findings_panel, "dismissed alerts not restorable", lambda p: p.replace("dismissed.delete(b.dataset.restore); saveDismissed()", "dismissed.add(b.dataset.restore); saveDismissed()")),
-    (preferences, "reads not scoped", lambda p: p.replace("const r = await fetch(scoped(p));", "const r = await fetch(p);")),
+    (preferences, "reads not scoped", lambda p: p.replace("const r = await fetch(scoped(p), {", "const r = await fetch(p, {")),
+    (preferences, "reads without the token", lambda p: p.replace('fetch(scoped(p), { headers: { "X-Kit-Token": TOKEN } })', "fetch(scoped(p))")),
+    (preferences, "project switch drops the key", lambda p: p.replace('(key ? "&k=" + encodeURIComponent(key) : "")', '""')),
     (preferences, "other projects silent", lambda p: p.replace("x.p !== proj && x.pending > (projSeen[x.root] ?? x.pending)", "false")),
     (released_holds, "released question disabled", lambda p: p.replace('${a.held || a.released ? "" : " disabled"}', '${a.held ? "" : " disabled"}')),
     (released_holds, "released turn silent", lambda p: p.replace("    : a.released ? goneHTML(a, n)\n    : a.turns", "    : a.turns")),

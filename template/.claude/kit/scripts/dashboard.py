@@ -27,7 +27,7 @@ of attention.py: a project in another tab of the picker never waits on the page.
   GET  /api/events                   Server-Sent Events: "change" when a work dir changes, so a
                                      background tab (whose timers the browser throttles) learns
                                      at once that it must fetch /api/attention and /api/tasks
-                                     (needs ?t=<page token> or a localhost Origin)
+                                     (needs ?t=<page token>)
   POST /api/answer                   answers or releases a held AskUserQuestion
   POST /api/cleanup                  deletes what a confirmed cleanup plan listed, nothing else
   POST /api/close                    "Mark as done": the same `closed` marker as `work.sh done <ID>`
@@ -38,7 +38,12 @@ by path, and a worktree is addressed by its index in the list, never by a path t
 sends. The writes are an answer to a question a hook is holding right now, a cleanup the dev
 confirmed and a task the dev marked done; all need the per-server token embedded in the page, a localhost Origin and
 Host and a JSON body: a foreign page can POST a form, but cannot read the token nor send that
-content type without a preflight.
+content type without a preflight. Every read needs the token too, and the page itself the key
+of its link (?k=, `flow.py page-key`, derived from the private key in $FORECREW_HOME/private):
+a local process that cannot read that key gets neither the page nor its token. Only
+GET /api/ping answers without either, for `work.sh ui start` to find a running server. An
+answer is written signed (flow.sign_answer): the holds ignore any other; Allow of a permission
+is refused unless `work.sh ui allow on`.
 
 A task is done when a pull or merge request of its worktree's branch is open or merged
 (GitHub or GitLab API, token from the environment or the origin URL, never sent to the page),
@@ -1946,7 +1951,9 @@ def answer(root, body, now=None):
     elif a["kind"] == "permission":
         if body.get("behavior") not in ("allow", "deny"):
             return 400, "behavior must be allow or deny"
-        target, content = base + ".answer.json", json.dumps({"qid": qid, "behavior": body["behavior"], "via": "web"})
+        if body["behavior"] == "allow" and not _FLOW.remote_allow_on():
+            return 403, "allow from the page is off (work.sh ui allow on); answer in the terminal"
+        target, content = base + ".answer.json", {"qid": qid, "behavior": body["behavior"], "via": "web"}
     elif a["kind"] == "turn":
         if body.get("kind") is not None:
             # A message the server builds, never one the page wrote: the findings decided.
@@ -1958,11 +1965,14 @@ def answer(root, body, now=None):
             message = body.get("message")
         if not isinstance(message, str) or not message.strip() or len(message) > MAX_OTHER:
             return 400, "message must be a non-empty text of at most 4000 characters"
-        target, content = base + ".answer.json", json.dumps({"qid": qid, "message": message, "via": "web"})
+        target, content = base + ".answer.json", {"qid": qid, "message": message, "via": "web"}
     else:
         if not valid_picks(a.get("questions") or [], body.get("answers")):
             return 400, "answers do not fit the question"
-        target, content = base + ".answer.json", json.dumps({"qid": qid, "answers": body["answers"], "via": "web"})
+        target, content = base + ".answer.json", {"qid": qid, "answers": body["answers"], "via": "web"}
+    if isinstance(content, dict):
+        # The hold acts only on a signed answer: anything else in the project can write this file.
+        content = json.dumps(_FLOW.sign_answer(content))
     tmp = os.path.join(os.path.dirname(base), f".tmp-{secrets.token_hex(6)}")
     with open(tmp, "w") as f:
         f.write(content)
@@ -2039,6 +2049,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
     root = "."
     # Set by serve(); with None every write is refused.
     token = None
+    # Set by serve(): the key the page's link carries; None reads it from the private key.
+    page_key = None
     # Open event streams of this server class; over MAX_STREAMS a new one gets 503.
     streams = None
 
@@ -2051,6 +2063,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # overlay them and borrow the dev's click.
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Content-Security-Policy", "frame-ancestors 'none'")
+        # The page's URL carries its key (?k=): no link it opens may receive it.
+        self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -2089,9 +2103,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # otherwise read the contracts and the event log.
         return (self.headers.get("Host") or "").rsplit(":", 1)[0] in LOCAL_HOSTS
 
-    def local_origin(self):
-        origin = urllib.parse.urlparse(self.headers.get("Origin") or "")
-        return origin.scheme == "http" and origin.hostname in LOCAL_HOSTS and origin.netloc == self.headers.get("Host")
+    def token_ok(self, q):
+        """The page's token, as a header (fetch) or ?t= (EventSource cannot set headers). Every
+        read needs it, not only the writes: a local process could read the page otherwise, and
+        the page carries the token that answers what a hook holds."""
+        sent = self.headers.get("X-Kit-Token") or (q.get("t") or [""])[0]
+        return bool(self.token) and hmac.compare_digest(sent.encode(), self.token.encode())
+
+    def key_ok(self, q):
+        """The page itself needs the key of its link (`work.sh ui start` prints it): derived from
+        the private answer key, so only who can read that key, or was given the link, gets in."""
+        sent = (q.get("k") or [""])[0]
+        try:
+            want = self.page_key or _FLOW.page_key()
+        except (OSError, RuntimeError):
+            return False
+        return hmac.compare_digest(sent.encode(), want.encode())
 
     def post(self):
         err = lambda code, msg: self.send(code, json.dumps({"error": msg}), "application/json")
@@ -2146,17 +2173,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send(403, "forbidden", "text/plain")
         url = urllib.parse.urlparse(self.path)
         q = urllib.parse.parse_qs(url.query)
+        if url.path == "/api/ping":
+            # What `work.sh ui start` probes for a running dashboard: no data, no key.
+            return self.send(200, json.dumps({"forecrew": True}), "application/json")
         if url.path in ("/", "/index.html"):
+            if not self.key_ok(q):
+                return self.send(403, "Open the dashboard with the link `work.sh ui start` prints: it carries the key (?k=).\n",
+                                 "text/plain; charset=utf-8")
             page = read(os.path.join(KIT, "dashboard", "index.html"), limit=None) or ""
             return self.send(200, page.replace("__KIT_TOKEN__", self.token or ""), "text/html; charset=utf-8")
+        if not self.token_ok(q):
+            return self.send(403, json.dumps({"error": "needs the page's token"}), "application/json")
         if url.path == "/api/events":
-            # The stream holds a thread and one of MAX_STREAMS slots: only the page (its token,
-            # as ?t= since EventSource cannot set headers) or a localhost Origin may open one, so
-            # another site open in the browser cannot take the slots.
-            sent = (q.get("t") or [""])[0] or self.headers.get("X-Kit-Token") or ""
-            token_ok = bool(self.token) and hmac.compare_digest(sent.encode(), self.token.encode())
-            if not token_ok and not self.local_origin():
-                return self.send(403, json.dumps({"error": "the event stream needs the page's token"}), "application/json")
+            # The stream holds a thread and one of MAX_STREAMS slots: only the page may open one.
             root = self.project()
             if root is None:
                 return self.send(404, json.dumps({"error": "no such project"}), "application/json")
@@ -2256,7 +2285,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 def serve(root, port):
     register(root)
     # A new token per server: the page carries it, and nothing else that the server returns does.
-    handler = type("BoundHandler", (Handler,), {"root": root, "token": secrets.token_urlsafe(32)})
+    handler = type("BoundHandler", (Handler,), {"root": root, "token": secrets.token_urlsafe(32),
+                                                "page_key": _FLOW.page_key()})
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
     # Event streams live for minutes: their threads must not hold the process at exit.
     server.daemon_threads = True

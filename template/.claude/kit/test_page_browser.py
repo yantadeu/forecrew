@@ -281,6 +281,8 @@ STEPS = [needs_step, fold_step, decide_step, sidebar_step, menu_step, fold_hint_
 
 def main():
     base = tempfile.mkdtemp(prefix="page-browser-")
+    # The registry and the private key go to a temporary home, never the dev's ~/.forecrew.
+    os.environ["FORECREW_HOME"] = os.path.join(base, "home")
     proc, beat = None, threading.Event()
     try:
         repo, work, held = fixture(base)
@@ -288,7 +290,9 @@ def main():
             threading.Thread(target=keep_held, args=(path, beat), daemon=True).start()
         port = free_port()
         proc = serve(repo, port)
-        ctx = {"repo": repo, "work": work, "url": f"http://127.0.0.1:{port}/"}
+        key = subprocess.run([sys.executable, os.path.join(KIT, "hooks", "flow.py"), "page-key"],
+                             capture_output=True, text=True, check=True).stdout.strip()
+        ctx = {"repo": repo, "work": work, "url": f"http://127.0.0.1:{port}/?k={key}"}
         with sync_playwright() as pw:
             browser = pw.chromium.launch()
             page = browser.new_page(viewport={"width": 1400, "height": 900}, locale="en-US")

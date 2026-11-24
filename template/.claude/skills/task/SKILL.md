@@ -67,10 +67,11 @@ stage cites them and the gates check that none is left uncovered.
 
 **Dashboard.** Once per session, before the first stage, ask the dev with `AskUserQuestion`:
 "Open the live dashboard of the agents?" with "Yes, open it (Recommended)" and "No". On yes,
-run `bash .claude/kit/scripts/work.sh ui start`: it starts in the background, returns at once
-and prints the URL (the first free port from 8787, so each worktree gets its own). Then open
-it: `open <url>` on macOS, `xdg-open <url>` on Linux, otherwise give the dev the link. It
-follows whichever task is current, so do not ask again in the same session.
+run `bash .claude/kit/scripts/work.sh ui start --open`: it starts in the background, returns at
+once and opens the dev's browser on the page (its link carries a key you never need to see). If
+it says there is no browser opener, ask the dev to run `bash .claude/kit/scripts/work.sh ui
+start` in their own terminal. Never read or print the link's key. It follows whichever task is
+current, so do not ask again in the same session.
 `work.sh ui stop` stops it.
 
 ## 4. Contract and clarification

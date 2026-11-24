@@ -41,7 +41,9 @@ the dev answers it there or in "Waiting on you". The hooks keep this in `.work/a
 it clears when the dev answers or submits a prompt. While the page is open, the hooks hold the
 request for it:
 
-- a permission dialog, always: the page allows or denies it (`hooks/attention.py permission`);
+- a permission dialog, when the dev ran `work.sh ui allow on` (per user, default off): the page
+  allows or denies it (`hooks/attention.py permission`). Off, the dialog shows in the terminal at
+  once and the page only alerts;
 - a question, when the dev turned web answers on in that worktree (`work.sh ui answers on`);
 - the main session's turn, when the dev ran `work.sh ui turns on` there: the message written on
   the page continues the session.
@@ -51,6 +53,15 @@ only a page in view keeps a hold (its polls say `visible`), up to 3570 s under t
 timeout. The dev turns the two switches on or off in the terminal (`work.sh
 ui answers|turns on|off`) or on the dashboard, which asks first and says the risk
 (`POST /api/switch`). Turning them is the dev's act, never an agent's.
+
+A hold acts only on an answer signed with the key in `$FORECREW_HOME/private/answer.key`
+(0600, outside the project): the answer file lives in `.work/`, which any process of the project
+can write, so a file an agent, a test or a build script writes there is ignored. The page is
+served only with its link's key (`?k=`), and every API call needs the page's token, so a local
+process that cannot read that key cannot answer through the dashboard either. That boundary
+holds against what cannot read `$FORECREW_HOME/private`: run agents sandboxed, with that
+directory unreadable, for it to hold against them. Never read, print or pass on the dashboard
+link's key; start the page with `work.sh ui start --open`.
 
 Ask the dev with `AskUserQuestion` whenever the answer is a choice: a question can be answered
 from the dashboard, a free-text request cannot. How a task closes and is cleaned up is in

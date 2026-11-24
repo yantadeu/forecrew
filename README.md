@@ -78,10 +78,13 @@ setup.
   answer, a permission to allow or deny, the session's turn to reply to, findings to fix or
   accept, a PR to open. WAIT says which agent works on what, so you know nothing is stuck.
 - **Answer everything from the page.** While the page is open, the hooks hold what the session
-  waits for: a permission dialog (allow or deny, always), a question and the main session's turn
-  (your message on the page continues the session). Questions and turns have a switch per
-  worktree, on the page itself (it asks first and says the risk) or in the terminal (`work.sh ui
-  answers on`, `work.sh ui turns on`). "Answer in the terminal" or closing the page hands any of
+  waits for: a permission dialog (allow or deny, once you run `work.sh ui allow on`; off by
+  default, the dialog stays in the terminal and the page only alerts), a question and the main
+  session's turn (your message on the page continues the session). Questions and turns have a
+  switch per worktree, on the page itself (it asks first and says the risk) or in the terminal
+  (`work.sh ui answers on`, `work.sh ui turns on`). Every answer is signed with a key outside the
+  project, so nothing a process of the project writes passes for yours; see
+  [Security of web answers](#security-of-web-answers). "Answer in the terminal" or closing the page hands any of
   them back at once.
 - **Decisions reach the session at once.** A finding decided on the page goes to the session
   after its next tool call while it works, or, when it stopped to have the findings decided,
@@ -103,7 +106,8 @@ setup.
   worktree, the count in the tab title, a beep (with a mute) and a browser notification that
   shows the kind of alert, never the command.
 - **Answer from your phone.** With the Telegram bridge on (`work.sh telegram start`), what waits
-  on you reaches a bot chat: a permission with Allow and Deny, a question with its options, the
+  on you reaches a bot chat: a permission with Allow and Deny (with `work.sh ui allow on`;
+  otherwise an alert to answer in the terminal), a question with its options, the
   session's turn you continue by replying to its message, and "Answer in the terminal" on each.
   It answers through the same checks as the page, reads only your chat, masks the command it
   shows (or hides it with `"telegram": {"details": false}`), and says when something was answered
@@ -337,9 +341,28 @@ In Claude Code, `/task` asks once per session whether to open the dashboard, and
 starts it in the background and opens your browser. By hand:
 
 ```bash
-bash .claude/kit/scripts/work.sh ui start   # background, prints the URL, frees the terminal
+bash .claude/kit/scripts/work.sh ui start   # background, prints the link (with its key), frees the terminal
 bash .claude/kit/scripts/work.sh ui stop
 ```
+
+### Security of web answers
+
+The hooks hold a question, a turn or a permission for the page through files in `.work/`, which
+every process of the project can write: an agent's background job, a test, a build script. So:
+
+- An answer counts only when it is signed with the key in `~/.forecrew/private/answer.key`
+  (0600 in a 0700 directory, outside the project). The dashboard and the Telegram bridge sign
+  what they write; anything else is ignored and the request goes back to the terminal.
+- The page is served only with its link's key (`?k=`, printed by `ui start`), and every API call
+  needs the token the page carries. A local process without the key gets neither.
+- Allowing a permission from the page or Telegram is off by default: `work.sh ui allow on|off`,
+  one flag for your user in `~/.forecrew/private`. Off, a permission dialog shows in the terminal
+  at once, and the page and the phone only tell you it waits.
+
+This keeps out what cannot read `~/.forecrew/private`. An agent running unsandboxed as your user
+can read it; for the boundary to hold against agents, run them sandboxed with that directory
+unreadable, and do not paste the dashboard link into a session. `/task` opens the page with
+`ui start --open`, which never prints the key.
 
 One dashboard serves every project with Forecrew on your machine. Each project registers itself
 in `~/.forecrew/projects.json` when a Claude Code session starts in it, and `ui start` in a second
@@ -482,9 +505,10 @@ Off by default. In `flow.json`:
 | `work.sh checks` | run `checks` of `flow.json` and write `checks.md`. Exits 1 when one fails |
 | `work.sh telegram start\|stop\|status` | the Telegram bridge, one for every project on the machine |
 | `work.sh telegram chat-id` | the chat id of the last messages sent to your bot |
-| `work.sh ui start` / `ui stop` | local dashboard of every worktree's tasks, in the background (first free port from 8787); a dashboard already running serves this project too, and start prints its link |
+| `work.sh ui start [--open]` / `ui stop` | local dashboard of every worktree's tasks, in the background (first free port from 8787); a dashboard already running serves this project too, and start prints its link with its key (`--open` opens the browser on it and prints no key) |
 | `work.sh ui [port]` | local dashboard in the foreground |
 | `work.sh ui answers [on\|off]` | let the dashboard answer this worktree's questions (default off) |
+| `work.sh ui allow [on\|off]` | let the dashboard and Telegram allow a permission dialog, for every project of your user (default off) |
 | `work.sh ui turns [on\|off]` | let the dashboard send this worktree's main session its next message (default off) |
 | `merge-order.py [--base <remote/branch>] [branch ...]` | merge order of the open branches (default: the worktrees' branches) |
 | `work.sh findings <ID>` | each review finding of a task with its key and state, for the keyed lines of `findings-decision.md` |

@@ -16,7 +16,9 @@
 #        work.sh cleanup <ID>|--all-done [--state] [--worktree] [--memory]
 #                                      prints what the cleanup of done tasks deletes (the dashboard's
 #                                      plan); in a terminal, deletes it after "yes"
-#        work.sh ui start | stop       dashboard in the background (first free port from 8787), or stop it;
+#        work.sh ui start [--open] | stop   dashboard in the background (first free port from 8787), or
+#                                      stop it; prints the link with its key (?k=), or with --open opens
+#                                      the browser on it and prints the address only;
 #                                      a dashboard already running serves this project too: start
 #                                      registers it there and prints its link instead
 #        work.sh ui [port]             dashboard in the foreground (default 8787)
@@ -25,6 +27,9 @@
 #        work.sh ui answers [on|off]   lets the dashboard answer this worktree's AskUserQuestion
 #                                      (held up to an hour while the page is open and in view); no argument
 #                                      prints the state. Default off: alerts only.
+#        work.sh ui allow [on|off]     lets the dashboard and Telegram allow a permission dialog (held
+#                                      while the page is open); for every project of this user. Default
+#                                      off: the dialog shows in the terminal at once, the page only alerts.
 #        work.sh telegram start|stop|status   the Telegram bridge (scripts/telegram.py): what waits on
 #                                      you reaches your phone and is answered from there; one bridge
 #                                      serves every project. Needs FORECREW_TELEGRAM_TOKEN and
@@ -175,14 +180,30 @@ EOF
     case "${2:-}" in
       start)
         # Background server, so neither the terminal nor the agent's shell stays blocked.
-        if [ -f "$pidf" ] && kill -0 "$(cat "$pidf")" 2>/dev/null; then cat "$work/ui.url"; exit 0; fi
-        # One dashboard serves every project: a running one (it answers /api/projects) gets this
+        # The page is served only with the key in its link (?k=), kept out of the project: ui.url
+        # holds the address alone, and the key is added when printed.
+        key=$(python3 "$hook" page-key) || { echo "cannot make the private key under \$FORECREW_HOME/private" >&2; exit 2; }
+        # --open (what an agent runs): opens the browser on the link and prints the address without
+        # the key, so the key never lands in an agent's context. Without it, prints the link.
+        show() {  # <address> <query without k, may be empty> [--open]
+          local link="$1/?${2:+$2&}k=$key"
+          if [ "${3:-}" = "--open" ]; then
+            if command -v xdg-open >/dev/null; then xdg-open "$link" >/dev/null 2>&1 &
+            elif command -v open >/dev/null; then open "$link"
+            else echo "no browser opener: run 'bash .claude/kit/scripts/work.sh ui start' in your terminal for the link" >&2; fi
+            echo "$1 (opened in the browser; the link with its key: work.sh ui start, in your terminal)"
+          else
+            echo "$link"
+          fi
+        }
+        if [ -f "$pidf" ] && kill -0 "$(cat "$pidf")" 2>/dev/null; then show "$(cat "$work/ui.url")" "" "${3:-}"; exit 0; fi
+        # One dashboard serves every project: a running one (it answers /api/ping) gets this
         # project in its registry, and no second server starts.
         python3 "$(dirname "$0")/dashboard.py" register "$root" >/dev/null 2>&1 || true
         for p in $(seq 8787 8799); do
-          if curl -fs -m 1 -o /dev/null "http://127.0.0.1:$p/api/projects" 2>/dev/null; then
+          if curl -fs -m 1 -o /dev/null "http://127.0.0.1:$p/api/ping" 2>/dev/null; then
             name=$(basename "$root")
-            echo "http://127.0.0.1:$p/?project=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "$name")"
+            show "http://127.0.0.1:$p" "project=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "$name")" "${3:-}"
             exit 0
           fi
         done
@@ -210,10 +231,10 @@ sys.exit(1)') || { echo "no free port in 8787-8799" >&2; exit 2; }
         echo $! > "$pidf"
         echo "http://127.0.0.1:$port" > "$work/ui.url"
         for _ in $(seq 1 25); do
-          curl -fs -o /dev/null "http://127.0.0.1:$port/" 2>/dev/null && break
+          curl -fs -o /dev/null "http://127.0.0.1:$port/api/ping" 2>/dev/null && break
           sleep 0.2
         done
-        cat "$work/ui.url"
+        show "$(cat "$work/ui.url")" "" "${3:-}"
         ;;
       stop)
         [ -f "$pidf" ] && kill "$(cat "$pidf")" 2>/dev/null || true
@@ -230,6 +251,14 @@ sys.exit(1)') || { echo "no free port in 8787-8799" >&2; exit 2; }
           *) echo "usage: work.sh ui turns [on|off]" >&2; exit 2 ;;
         esac
         ;;
+      allow)
+        # Allow of a permission from the page or Telegram. Per user, not per worktree: the flag
+        # lives in $FORECREW_HOME/private, out of reach of what runs in a project.
+        case "${3:-}" in
+          on|off|"") exec python3 "$hook" remote-allow ${3:+"$3"} ;;
+          *) echo "usage: work.sh ui allow [on|off]" >&2; exit 2 ;;
+        esac
+        ;;
       answers)
         # Per worktree, because .work is: the hook reads the flag from its own work dir.
         att="$work/attention"
@@ -242,11 +271,12 @@ sys.exit(1)') || { echo "no free port in 8787-8799" >&2; exit 2; }
         ;;
       *)
         port="${2:-8787}"
-        echo "http://127.0.0.1:$port"
+        # The link only on a terminal: `ui start` runs this with its output in .work/ui.log.
+        if [ -t 1 ]; then echo "http://127.0.0.1:$port/?k=$(python3 "$hook" page-key)"; else echo "http://127.0.0.1:$port"; fi
         # Lists the tasks of every worktree of the repository, not only this one's.
         exec python3 "$(dirname "$0")/dashboard.py" "$root" "$port"
         ;;
     esac
     ;;
-  *) sed -n 2,24p "$0"; exit 2 ;;
+  *) sed -n 2,38p "$0"; exit 2 ;;
 esac

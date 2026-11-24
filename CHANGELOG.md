@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Security: web answers can no longer be forged from inside the project. The holds took any
+  `.work/attention/<session>/<agent>.answer.json` with the right `qid` (stored in plain text
+  next to it), so any process of the project (an agent's background job, a parallel subagent,
+  a test or build script) could allow a permission dialog, answer a question or send the
+  session a message as the dev. Now:
+  - every answer is signed (HMAC-SHA256) with a key in `$FORECREW_HOME/private/answer.key`
+    (0600, outside the project); the holds ignore anything unsigned or mis-signed;
+  - Allow of a permission from the page or Telegram is off by default (`work.sh ui allow
+    on|off`, a flag in the same private directory). Off, the permission is not held: the dialog
+    shows in the terminal at once and the page and the phone only alert;
+  - the page is served only with its link's key (`?k=`), every read needs the page's token, and
+    a localhost `Origin` no longer opens the event stream without it: a local process could read
+    the page, take its token and answer through the dashboard. `GET /api/ping` (no data) is what
+    `ui start` probes. `Referrer-Policy: no-referrer` keeps the key out of opened links;
+  - `ui start --open` opens the browser and prints the address without the key; `/task` uses it.
+    The key never goes into `.work/` (`ui.url`, `ui.log`).
+
 - The project's checks run by the machine before the reviewers. `checks` in `flow.json` lists
   the lint, build and test commands; `work.sh checks` (and `work.sh review-package`) runs them and
   writes `.work/<ID>/checks.md` with each command's result and masked output, and a fingerprint

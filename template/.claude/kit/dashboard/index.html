@@ -1328,8 +1328,8 @@ async function errorText(r) {
 // by its index in /api/projects (?p=), never by a path. An older server has no projects: no ?p.
 let proj = null, projects = [], projSeen = {};
 const scoped = (path) => proj == null || path.startsWith("api/projects") ? path : path + (path.includes("?") ? "&" : "?") + "p=" + proj;
-const getJSON = async (p) => { const r = await fetch(scoped(p)); if (r.status === 404) return null; if (!r.ok) throw new Error(p + ": HTTP " + r.status + " " + (await r.text()).slice(0, 200)); return r.json() };
-// Per-server secret the dashboard substitutes when it serves this page; required by every POST.
+const getJSON = async (p) => { const r = await fetch(scoped(p), { headers: { "X-Kit-Token": TOKEN } }); if (r.status === 404) return null; if (!r.ok) throw new Error(p + ": HTTP " + r.status + " " + (await r.text()).slice(0, 200)); return r.json() };
+// Per-server secret the dashboard substitutes when it serves this page; required by every request.
 const TOKEN = "__KIT_TOKEN__";
 // Split so the server's substitution leaves this one alone: TOKEN still equal to it means the
 // page was not served by a Forecrew dashboard.
@@ -1487,7 +1487,9 @@ function selectProject(i) {
   if (i === proj || !projects[i]) return;
   proj = i;
   try { localStorage.setItem("forecrew-project", projects[i].root) } catch (e) {}
-  history.replaceState(null, "", location.pathname + "?project=" + encodeURIComponent(projects[i].name));
+  // The link's key (?k=) stays in the address: a reload needs it to be served the page.
+  const key = new URLSearchParams(location.search).get("k");
+  history.replaceState(null, "", location.pathname + "?project=" + encodeURIComponent(projects[i].name) + (key ? "&k=" + encodeURIComponent(key) : ""));
   sel = null; openFile = null; openBot = null; lastTask = null; chatQueue = null; attnSig = "";
   connect(); tick();
 }

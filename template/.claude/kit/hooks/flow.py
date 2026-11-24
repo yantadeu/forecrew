@@ -17,6 +17,8 @@ UserPromptSubmit, SessionStart and SessionEnd (scripts/wire_hooks.py).
 Also the single implementation of the checks the scripts need:
   flow.py work-dir        prints the resolved work directory (refuses one outside the repo)
   flow.py status <ID>     re-runs the gate on every stage file; exit 1 on a failure or a FAIL
+  flow.py page-key        prints the key the dashboard's link carries (?k=)
+  flow.py remote-allow [on|off]   Allow of a permission from the page or Telegram (off by default)
 """
 import hashlib
 import json
@@ -70,6 +72,92 @@ def mask(text):
     for rx, repl in SENSITIVE:
         text = rx.sub(repl, text)
     return text
+
+
+def forecrew_home():
+    return os.environ.get("FORECREW_HOME") or os.path.join(os.path.expanduser("~"), ".forecrew")
+
+
+# Web answers (from the dashboard or the Telegram bridge) reach a hold as a file under the work
+# directory, which every process of the project can write: an agent's background job, a test, a
+# build script. So a hold acts only on an answer signed with a key that lives outside the project,
+# in <FORECREW_HOME>/private/answer.key (0600 in a 0700 directory). It does not stop a process
+# that can read that file; run agents sandboxed with that directory unreadable for that.
+PRIVATE_DIR = "private"
+ANSWER_KEY = "answer.key"
+# Allow of a permission from the page or Telegram: off unless this file exists. Outside the
+# project, so nothing a project's process writes can turn it on; `work.sh ui allow on|off`.
+REMOTE_ALLOW = "remote-allow"
+
+
+def private_dir():
+    return os.path.join(forecrew_home(), PRIVATE_DIR)
+
+
+def answer_key(create=False):
+    """The signing key, or None when there is none (or it is readable by others). create makes
+    one, for the signers (dashboard, telegram); the holds only read."""
+    d = private_dir()
+    path = os.path.join(d, ANSWER_KEY)
+    if create and not os.path.exists(path):
+        os.makedirs(d, mode=0o700, exist_ok=True)
+        os.chmod(d, 0o700)
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        except FileExistsError:
+            pass
+        else:
+            with os.fdopen(fd, "wb") as f:
+                f.write(os.urandom(32))
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
+        return None
+    with os.fdopen(fd, "rb") as f:
+        st = os.fstat(f.fileno())
+        if st.st_mode & 0o077 or (hasattr(os, "getuid") and st.st_uid != os.getuid()):
+            print(f"forecrew: {path} must be private to you (chmod 600); web answers are off.", file=sys.stderr)
+            return None
+        key = f.read()
+    return key if len(key) >= 32 else None
+
+
+def _answer_mac(key, answer):
+    import hmac
+    body = {k: v for k, v in answer.items() if k != "sig"}
+    data = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    return hmac.new(key, b"forecrew-answer\0" + data, hashlib.sha256).hexdigest()
+
+
+def sign_answer(answer):
+    """The answer with its signature; raises when no key can be made."""
+    key = answer_key(create=True)
+    if key is None:
+        raise RuntimeError("no private answer key: see " + private_dir())
+    return {**answer, "sig": _answer_mac(key, answer)}
+
+
+def answer_signed(answer):
+    """True when the answer carries a valid signature: written by the dashboard or the bridge."""
+    import hmac
+    if not isinstance(answer, dict) or not isinstance(answer.get("sig"), str):
+        return False
+    key = answer_key()
+    return key is not None and hmac.compare_digest(answer["sig"], _answer_mac(key, answer))
+
+
+def page_key():
+    """What the dashboard's URL carries (?k=) to be served at all: derived from the answer key, so
+    it survives a restart and every dashboard of this machine takes the same link."""
+    import hmac
+    key = answer_key(create=True)
+    if key is None:
+        raise RuntimeError("no private answer key: see " + private_dir())
+    return hmac.new(key, b"forecrew-page", hashlib.sha256).hexdigest()[:43]
+
+
+def remote_allow_on():
+    return os.path.isfile(os.path.join(private_dir(), REMOTE_ALLOW))
 
 
 def load_flow():
@@ -370,6 +458,24 @@ def status(flow, wid):
 
 def cli(args):
     # Exit codes: 0 ok, 1 a check failed, 2 configuration or usage error.
+    if args[0] == "page-key" and len(args) == 1:
+        print(page_key())
+        return 0
+    if args[0] == "remote-allow" and len(args) <= 2:
+        flag = os.path.join(private_dir(), REMOTE_ALLOW)
+        if args[1:] == ["on"]:
+            answer_key(create=True)  # makes the private directory, 0700
+            open(flag, "w").close()
+        elif args[1:] == ["off"]:
+            try:
+                os.unlink(flag)
+            except FileNotFoundError:
+                pass
+        elif args[1:]:
+            print("usage: flow.py remote-allow [on|off]", file=sys.stderr)
+            return 2
+        print("on" if remote_allow_on() else "off")
+        return 0
     flow = load_flow()
     if flow is None:
         print("forecrew: .claude/flow.json is missing or invalid", file=sys.stderr)

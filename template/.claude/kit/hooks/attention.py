@@ -27,6 +27,10 @@ dashboard while the page is open, and answers it through the documented PreToolU
 on the "answer in the terminal" button, when the page goes away, when answers are turned off,
 and before the hook timeout (3600 s in settings.json), because a hook killed at its timeout
 shows an error instead of the dialog.
+
+Every hold acts only on an answer signed with the private key (flow.answer_signed): the answer
+file sits in the project, where any of its processes can write. A permission is held only with
+`work.sh ui allow on`, whose flag lives outside the project too.
 """
 import json
 import os
@@ -432,7 +436,8 @@ def wait_page(path, alert, adir, pid, still_on, extra=None, let_go=None, hold=No
         picked = read_json(answer_path)
         if picked is not None:
             unlink(answer_path)
-            if isinstance(picked, dict) and picked.get("qid") == alert["qid"] and picked.get("via") == "web":
+            if isinstance(picked, dict) and picked.get("qid") == alert["qid"] and picked.get("via") == "web" \
+                    and F.answer_signed(picked):
                 return picked
             alert["released"] = "bad-answer"
             return None
@@ -484,15 +489,21 @@ def hold_alert(flow, event, kind, detail, still_on, extra=None, holdable=True, l
 
 
 def hold_permission(event, flow):
-    """PermissionRequest: allow or deny from the page while it is open (always on). Released,
-    the dialog stays in the terminal."""
+    """PermissionRequest: allow or deny from the page while it is open, only with `work.sh ui
+    allow on` (a file outside the project). Off, the alert is raised without a hold: the dialog
+    shows in the terminal at once, and the page and the phone say to answer there."""
     tool = event.get("tool_name") or ""
     if tool == "AskUserQuestion":
         return 0  # the question's own hold shows it
     detail = F.tool_detail_full(event)
     path, alert, picked = hold_alert(flow, event, "permission", f"{tool}: {detail}" if detail else tool,
-                                     lambda: True, tool=tool)
+                                     F.remote_allow_on, holdable=F.remote_allow_on(), tool=tool)
     if picked is None or picked.get("behavior") not in ("allow", "deny"):
+        return 0
+    if picked["behavior"] == "allow" and not F.remote_allow_on():
+        # Turned off during the hold: the terminal decides.
+        alert.update(held=False, released="switch-off", released_at=time.time())
+        write_json(path, alert)
         return 0
     unlink(path)
     decision = {"behavior": "allow"} if picked["behavior"] == "allow" else \
@@ -617,7 +628,8 @@ def hold(event, flow):
         if picked is not None:
             unlink(answer_path)
             answers = build_answers(questions, picked.get("answers")) \
-                if isinstance(picked, dict) and picked.get("qid") == alert["qid"] and picked.get("via") == "web" else None
+                if isinstance(picked, dict) and picked.get("qid") == alert["qid"] and picked.get("via") == "web" \
+                and F.answer_signed(picked) else None
             if answers is not None:
                 unlink(path)
                 # Every other key of the input is kept: updatedInput replaces the whole input.
