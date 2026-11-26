@@ -109,6 +109,7 @@ footer a{color:var(--ink2)}
   <a class="name" href="./"><img src="assets/forecrew-logo.svg" alt="">forecrew</a>
   <nav aria-label="Sections">
     <a href="#on-disk">A task on disk</a>
+    <a href="#memory">Memory</a>
     <a href="#dashboard">Dashboard</a>
     <a href="#install">Install</a>
     <a href="https://github.com/yantadeu/forecrew">GitHub</a>
@@ -145,6 +146,7 @@ footer a{color:var(--ink2)}
         <tr><td>One context checks its own work.</td><td>Contract, security, QA and product reviewers run in parallel, each in a clean context, on the same diff. Optionally, another vendor's model reads it too.</td></tr>
         <tr><td>Every stage on the most expensive model.</td><td>The lane picks each stage's model: Opus where the risk is, Sonnet where the work is routine. The Costs tab shows whether the cheaper runs needed more fix rounds.</td></tr>
         <tr><td>Decisions you never saw.</td><td>Every ruling taken without you goes in <code>ledger.md</code>, with what it costs if wrong.</td></tr>
+        <tr><td>Each task starts from zero, and cleaning it up deletes what it learned.</td><td>Learnings, kept decisions and one entry per finished task outlive the cleanup, and the next task searches them before its contract.</td></tr>
         <tr><td>"Done."</td><td>Done means a pull request exists, or you closed the task yourself.</td></tr>
         <tr><td>Watching five terminals.</td><td>One page lists every task of every worktree. What needs you is at the top, and you can answer it there.</td></tr>
       </tbody>
@@ -166,6 +168,27 @@ footer a{color:var(--ink2)}
       <pre id="file"></pre>
       <div class="gate" id="gate"></div>
     </div>
+  </div>
+</section>
+
+<section id="memory">
+  <div class="narrow">
+    <h2>What it remembers</h2>
+    <p><code>.work/CSV-12/</code> is deleted when the task is cleaned up. What is worth keeping leaves it first, and only with your ok. It goes into plain markdown files you commit and review like code.</p>
+  </div>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>File</th><th>What it keeps</th><th>Who reads it</th></tr></thead>
+      <tbody>
+        <tr><td><code>LEARNINGS.md</code></td><td>A fact a task proved that the code does not show, tagged.</td><td>Each reviewer loads only its tags.</td></tr>
+        <tr><td><code>DECISIONS.md</code></td><td>Rulings from the ledger that someone will later ask "why?" about, with what each costs if wrong.</td><td>The refiner. A task that would break one becomes a question for you.</td></tr>
+        <tr><td><code>TASKS.md</code></td><td>One entry per finished task: purpose, criteria, pull request.</td><td>The triage, so "didn't we do this already?" has an answer.</td></tr>
+        <tr><td><code>docs/brain/</code></td><td>Optional. Linked pages for what the code does not say: domain concepts, a glossary, who owns what, external systems.</td><td>Anyone. <code>/brain ask</code> answers with citations; the folder opens as an Obsidian vault.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="narrow" style="margin-top:28px">
+    <p><code>learnings.py --search</code> ranks all four by the words you give it, or by meaning if you set an embeddings command. <code>/brain add</code> distills a link, a file or a note into pages and never copies a secret or someone's contact. <code>/brain lint</code> lists pages the code now contradicts, broken links and facts gone stale. Point the brain at a folder outside the repository and it is your own notes instead of the team's.</p>
   </div>
 </section>
 
@@ -331,8 +354,17 @@ Result: PASS (exit 0, 21.7s)`],
 - [minor] [route: executor] AC-002: a description starting with "=" is written as is;
   the spreadsheet runs it as a formula. Prefix those cells with a quote.`],
 ["05-retro.md", "the retrospective",
-"Learnings are only kept with your ok, and future tasks read them.",
-`Status: DONE
+"Nothing is kept without your ok. What you check goes to LEARNINGS.md and DECISIONS.md; the folder can then go.",
+`## What went wrong
+- AC-002 came back from the security review: the contract never asked
+  what a cell starting with "=" does in a spreadsheet.
+
+## Proposed decisions
+## csv-utf8-bom
+- **Tags**: data
+- **Decision**: CSV exports are UTF-8 with a BOM.
+- **Why**: the spreadsheet finance uses misreads accents without it.
+- **Cost if wrong**: one byte, and a reader that shows it as a stray character.
 
 ## Proposed learnings
 ## csv-formula-injection
