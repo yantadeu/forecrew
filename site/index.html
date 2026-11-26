@@ -110,6 +110,7 @@ footer a{color:var(--ink2)}
   <nav aria-label="Sections">
     <a href="#on-disk">A task on disk</a>
     <a href="#memory">Memory</a>
+    <a href="#models">Models</a>
     <a href="#dashboard">Dashboard</a>
     <a href="#install">Install</a>
     <a href="https://github.com/yantadeu/forecrew">GitHub</a>
@@ -148,7 +149,7 @@ footer a{color:var(--ink2)}
         <tr><td>Decisions you never saw.</td><td>Every ruling taken without you goes in <code>ledger.md</code>, with what it costs if wrong.</td></tr>
         <tr><td>Each task starts from zero, and cleaning it up deletes what it learned.</td><td>Learnings, kept decisions and one entry per finished task outlive the cleanup, and the next task searches them before its contract.</td></tr>
         <tr><td>"Done."</td><td>Done means a pull request exists, or you closed the task yourself.</td></tr>
-        <tr><td>Watching five terminals.</td><td>One page lists every task of every worktree. What needs you is at the top, and you can answer it there.</td></tr>
+        <tr><td>Watching five terminals.</td><td>One page lists every task of every worktree. What needs you is at the top, and you can answer it there, on your phone, or from a desktop notification when no page is open.</td></tr>
       </tbody>
     </table>
   </div>
@@ -182,13 +183,34 @@ footer a{color:var(--ink2)}
       <tbody>
         <tr><td><code>LEARNINGS.md</code></td><td>A fact a task proved that the code does not show, tagged.</td><td>Each reviewer loads only its tags.</td></tr>
         <tr><td><code>DECISIONS.md</code></td><td>Rulings from the ledger that someone will later ask "why?" about, with what each costs if wrong.</td><td>The refiner. A task that would break one becomes a question for you.</td></tr>
-        <tr><td><code>TASKS.md</code></td><td>One entry per finished task: purpose, criteria, pull request.</td><td>The triage, so "didn't we do this already?" has an answer.</td></tr>
+        <tr><td><code>TASKS.md</code></td><td>One entry per finished task: purpose, criteria, pull request, and its lane, models, fix rounds and cost.</td><td>The triage, so "didn't we do this already?" has an answer.</td></tr>
         <tr><td><code>docs/brain/</code></td><td>Optional. Linked pages for what the code does not say: domain concepts, a glossary, who owns what, external systems.</td><td>Anyone. <code>/brain ask</code> answers with citations; the folder opens as an Obsidian vault.</td></tr>
       </tbody>
     </table>
   </div>
   <div class="narrow" style="margin-top:28px">
     <p><code>learnings.py --search</code> ranks all four by the words you give it, or by meaning if you set an embeddings command. <code>/brain add</code> distills a link, a file or a note into pages and never copies a secret or someone's contact. <code>/brain lint</code> lists pages the code now contradicts, broken links and facts gone stale. Point the brain at a folder outside the repository and it is your own notes instead of the team's.</p>
+    <p>The files only grow, and every agent pays to read them. <code>learnings.py --tidy</code> lists near duplicates, decisions already superseded and entries no reviewer loads; the retrospective proposes the merged entry or the one to drop, and nothing changes until you check it.</p>
+  </div>
+</section>
+
+<section id="models">
+  <div class="narrow">
+    <h2>Models and quality</h2>
+    <p>The lane you confirm in the triage also picks the model of each stage. The hook sets it when the stage launches, so nobody has to remember. Out of the box:</p>
+  </div>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Lane</th><th>When</th><th>Models</th></tr></thead>
+      <tbody>
+        <tr><td>Full</td><td>Irreversible, regulated, an external contract.</td><td>Opus on every stage.</td></tr>
+        <tr><td>Light</td><td>A real behavior change with one clear reading.</td><td>Sonnet, except the refiner and the security reviewer on Opus.</td></tr>
+        <tr><td>None</td><td>Trivial, no behavior change.</td><td>Sonnet, except the security reviewer on Opus.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="narrow" style="margin-top:28px">
+    <p>Change it under <code>models</code> in <code>flow.json</code>, or say "use opus on this one" for a single task. A saving only counts if the work holds up, so the Costs tab puts the rework next to the cost: fix rounds, stages sent back and cost per delivered task, by lane and executor model (Fig. 4). When one model's blind spots are the worry, hire the second-opinion reviewer: Codex or Gemini reads the same diff, and only the findings confirmed in the code stay.</p>
   </div>
 </section>
 
