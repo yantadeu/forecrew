@@ -1,6 +1,9 @@
 {
   "work_dir": ".work",
   "learnings": ".claude/LEARNINGS.md",
+  "decisions": ".claude/DECISIONS.md",
+  "tasks": ".claude/TASKS.md",
+  "brain": "docs/brain",
   "product_sources": ".claude/product-sources.md",
   "max_fix_rounds": 3,
   "checks": [],

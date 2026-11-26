@@ -33,6 +33,23 @@ Write `05-retro.md`:
   ```
 
   An existing learning that this task contradicted is a proposal too: say which one and why.
+- `## Proposed decisions`: the rulings of `ledger.md` worth keeping after the task is deleted,
+  the ones a future dev would ask "why is it like this?" about. Skip rulings that only mattered
+  inside the task. Read the decisions file (`decisions` in `.claude/flow.json`, default
+  `.claude/DECISIONS.md`) first; a ruling that replaces an existing decision names it. Format:
+
+  ```
+  ## <short-slug>
+  - **Tags**: <same tags as the learnings>
+  - **Decision**: what was decided, in one sentence.
+  - **Why**: the reason, from the ledger.
+  - **Cost if wrong**: from the ledger.
+  - **From**: <task ID>, <today>.
+  ```
+- `## Proposed brain updates`: only when the brain folder exists (`brain` in `flow.json`,
+  default `docs/brain`). A concept of the domain or the system the task had to discover,
+  as the page `/brain add` would write or the lines to add to an existing page, with this task
+  as its source. Follow `.claude/commands/brain.md` for what a page holds.
 - `## Kit changes`: a stage, gate or prompt that should change because of this task, if any.
 
 Nothing worth keeping is a valid answer; do not invent a learning to fill the file. Answer the

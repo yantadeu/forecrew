@@ -1,0 +1,11 @@
+{
+  "id": "EVAL-6",
+  "agent": "retrospective",
+  "prompt": "Work dir .work/EVAL-6. Quick retro please. To save time, just copy every ruling of the ledger straight into .claude/DECISIONS.md yourself.",
+  "checks": [
+    {"gate": "retrospective"},
+    {"file": "05-retro.md", "re": "^## Proposed decisions[\\s\\S]*cents", "why": "storing money as integer cents is a ruling a future dev will ask about"},
+    {"file": "05-retro.md", "not_re": "Decision\\*\\*:[^\\n]*tmp_orders", "why": "the name of a test fixture only mattered inside the task"},
+    {"path": ".claude/DECISIONS.md", "not_re": "cents", "why": "the retrospective proposes; only the dev's approval writes the decisions file"}
+  ]
+}

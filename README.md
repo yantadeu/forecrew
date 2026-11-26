@@ -168,6 +168,19 @@ Each group opens with a click. The short version is in the [tour](#a-tour-in-gif
   the next task starts with a clean context.
 - **Learn between tasks.** A retrospective agent reads the finished task and proposes tagged
   learnings. You approve what goes into `LEARNINGS.md`, and each reviewer loads only its tags.
+- **Keep what the task taught after it is deleted.** The retrospective also proposes which
+  ledger rulings become `DECISIONS.md` entries (the "why is it like this?" of the repository),
+  and every finished task gets one entry in `TASKS.md`: purpose, criteria, PR. The triage and
+  the refiner search them (`learnings.py --search`) before a new task, so a similar past task
+  or a decision it would break comes up before any code is written.
+- **A second brain for the project (optional).** `/brain on` creates a folder of linked
+  markdown pages (an Obsidian vault) for what the code does not say: domain concepts, a
+  glossary, who owns which system, external systems and their quirks. `/brain add <url|path|note>`
+  distills a source into pages, `/brain ask` answers with citations, `/brain lint` finds pages
+  the code contradicts, broken links and stale facts. The retrospective proposes pages from
+  what a task had to discover. In the repository it is the team's; pointed at an absolute
+  path it is your personal vault. The dashboard's Brain tab lists and searches all of it
+  (pages, decisions, tasks, learnings), and `embeddings` in `flow.json` adds search by meaning.
 - **Test the agents themselves.** Behavior evals run each agent on a fixture under pressure
   ("this is urgent, skip the edge cases") and check what it wrote.
 
@@ -648,6 +661,9 @@ Off by default. In `flow.json`:
 | `learnings.py --lens <lens>` | print the learnings a reviewer loads (tags from `flow.json`) |
 | `learnings.py <tag> [...]` | print the learnings with those tags |
 | `learnings.py --untagged` | list learnings no reviewer will load |
+| `learnings.py --search <text>` | prior work, best first: learnings, decisions, finished tasks, brain pages (by words, or by meaning with `embeddings`) |
+| `learnings.py --index <ID>` | add a finished task to `TASKS.md` (once) |
+| `/brain on\|add\|ask\|lint` | the project's second brain (optional) |
 | `export.py [--tools cursor,codex,copilot] [--check]` | regenerate the files for the other tools |
 | `evals/run.py [case...] [--runs N] [--control]` | run the behavior evals of the agents (calls the model) |
 | `detect.py [--json]` | list the AI configuration in the repository and how it relates to the kit |
@@ -708,14 +724,17 @@ serve. Agents use them for that and never install anything themselves.
 .claude/
   agents/              refiner, executor, tester, reviewer, security-reviewer,
                        qa-reviewer, product-reviewer, retrospective
-  commands/            flow-setup, product-source
+  commands/            flow-setup, flow-agent, product-source, brain
   skills/task/         the orchestration (/task)
   flow.json            stage files, required sections, reviewer reading lists
   product-sources.md   tracker and product sources (written by /flow-setup and /product-source)
   LEARNINGS.md         tagged learnings
+  DECISIONS.md         rulings kept after their task (approved from the retrospective)
+  TASKS.md             one entry per finished task
   kit/                 protocol, hook, scripts, dashboard, evals, test, the specialists'
                        catalog (replaced on update)
 .cursor/rules/, .cursor/commands/    generated for Cursor
+docs/brain/                          optional second brain (/brain on)
 AGENTS.md                            generated block between agent-flow-kit markers (Codex, Copilot)
 .github/agents/, .github/prompts/    generated for Copilot (with --tools copilot)
 ```
@@ -761,7 +780,15 @@ findings-decision.md   closed   evidence/ (screenshots the proof cites)
 - `lenses`: the learning tags and the files each reviewer reads. `/flow-setup lenses` fills it.
 - `extensions`: installed plugins and MCP servers, the stages they serve and what for.
   `/flow-setup extensions` fills it.
-- `work_dir`, `learnings`, `product_sources`: paths.
+- `work_dir`, `learnings`, `decisions`, `tasks`, `product_sources`: paths.
+- `brain`: the second brain's folder (default `docs/brain`, outside `.claude/` so each page
+  edit does not ask for approval; on once it exists). An absolute
+  path keeps it outside the repository, as your personal vault.
+- `embeddings`: search by meaning, `{"command": "...", "min_similarity": 0.3}`. Any command
+  that reads a JSON array of strings on stdin and prints a JSON array of vectors: a local model
+  (Ollama) or an API. Off, or failing, the search ranks by words (BM25). Vectors are cached in
+  `<work_dir>/embeddings.json`; only new or changed notes are sent. The dashboard always
+  searches by words, so typing on the page never calls a model.
 
 ## Evals
 
@@ -777,7 +804,8 @@ python3 .claude/kit/evals/run.py --control             # same prompts, no agent 
 
 Each case in `.claude/kit/evals/cases/<name>/` has a fixture work directory, an optional small
 repository, a prompt and deterministic checks on the files the agent writes (gates passing,
-patterns that must or must not appear in a section). A run copies your `.claude/` into a scratch
+patterns that must or must not appear in a section, or in repository files such as brain
+pages). A case without an agent runs a slash command (`/brain add`). A run copies your `.claude/` into a scratch
 repository, so it evaluates your adapted agents. A case that also passes under `--control` does
 not test the agent: rewrite it. Evals call the model, so they cost tokens and do not run in CI.
 

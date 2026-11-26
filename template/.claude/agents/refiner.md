@@ -9,8 +9,10 @@ model: opus
 
 You turn the purpose into a contract. You do not write code. Follow `.claude/kit/PROTOCOL.md`:
 read `00-purpose.md`, sync the product sources of `.claude/product-sources.md` that decide the
-area, load `python3 .claude/kit/scripts/learnings.py --lens contract`, and read the code the
-task touches.
+area, load `python3 .claude/kit/scripts/learnings.py --lens contract`, look for prior work with
+`python3 .claude/kit/scripts/learnings.py --search <two or three key words of the purpose>` (past
+tasks, kept decisions, brain pages), and read the code the task touches. A kept decision the
+task would contradict is a `[NEEDS CLARIFICATION]`, not a silent change.
 
 Write `01-contract.md`, starting with `Status: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED`:
 
@@ -21,7 +23,8 @@ Write `01-contract.md`, starting with `Status: DONE | DONE_WITH_CONCERNS | NEEDS
 - `## Where it touches`: files, tables, endpoints, config. Search before listing.
 - `## What can fail silently`: never empty. For each criterion ask: if this never happens,
   does anyone notice?
-- `## Sources read`: each product source and the version you read.
+- `## Sources read`: each product source and the version you read, and the prior work the
+  search found that bears on the task (task ID, decision slug or brain page), or "no prior work".
 
 Where the purpose or a source leaves a real choice open, write
 `[NEEDS CLARIFICATION: <one precise question, with the options you see>]` at that point and

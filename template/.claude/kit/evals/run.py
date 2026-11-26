@@ -4,6 +4,11 @@
 Usage: run.py [case...] [--runs N] [--control] [--model M]   run cases with `claude -p --agent <role>`
        run.py --grade <case> <repo-dir>                       grade an existing run (no model call)
 
+"allowed_tools" lists permission rules the run grants. Writes under .claude/ ask even under
+acceptEdits and no rule grants them, so what an agent writes must live elsewhere (docs/brain). A case without "agent" runs its prompt as a plain session (a slash command such as `/brain add`).
+Checks read a stage file of the work directory ("file") or files of the repository ("path", a glob
+whose matches are read together, so "not_re" holds for every one of them).
+
 Method: a case is a fixture work directory, a prompt that
 often pushes the agent to skip a rule, and deterministic checks on the files it writes. Run a
 case several times (--runs 5): one pass proves little. --control runs the same prompt with no
@@ -48,10 +53,12 @@ def setup(case, c, control=False):
     app = os.path.join(HERE, "cases", case, "repo")
     if os.path.isdir(app):
         shutil.copytree(app, repo, dirs_exist_ok=True)
-    work = os.path.join(repo, ".work")
-    shutil.copytree(os.path.join(HERE, "cases", case, "work"), os.path.join(work, c["id"]))
-    with open(os.path.join(work, "current"), "w") as f:
-        f.write(c["id"])
+    fixture = os.path.join(HERE, "cases", case, "work")
+    if os.path.isdir(fixture):
+        work = os.path.join(repo, ".work")
+        shutil.copytree(fixture, os.path.join(work, c["id"]))
+        with open(os.path.join(work, "current"), "w") as f:
+            f.write(c["id"])
     for cmd in (["git", "init", "-q"], ["git", "add", "-A"],
                 ["git", "-c", "user.name=eval", "-c", "user.email=eval@localhost", "commit", "-qm", "fixture"]):
         subprocess.run(cmd, cwd=repo, check=True, capture_output=True)
@@ -71,23 +78,32 @@ def grade(c, repo):
             if why:
                 failed.append(f"gate {chk['gate']}: {why}")
             continue
-        text = flow_mod.read(os.path.join(work, chk["file"])) or ""
+        if "path" in chk:
+            name = chk["path"]
+            files = sorted(f for f in glob.glob(os.path.join(repo, name), recursive=True) if os.path.isfile(f))
+            text = "\n".join(flow_mod.read(f) or "" for f in files)
+        else:
+            name = chk["file"]
+            text = flow_mod.read(os.path.join(work, name)) or ""
         if chk.get("section"):
             text = flow_mod.section(text, chk["section"])
         if "re" in chk and not re.search(chk["re"], text, re.M | re.I):
-            failed.append(f"{chk['file']}: expected /{chk['re']}/ ({chk.get('why', '')})")
+            failed.append(f"{name}: expected /{chk['re']}/ ({chk.get('why', '')})")
         if "not_re" in chk and re.search(chk["not_re"], text, re.M | re.I):
-            failed.append(f"{chk['file']}: unexpected /{chk['not_re']}/ ({chk.get('why', '')})")
+            failed.append(f"{name}: unexpected /{chk['not_re']}/ ({chk.get('why', '')})")
     return failed
 
 
 def run_once(case, c, control, model):
     repo = setup(case, c, control)
     cmd = ["claude", "-p", c["prompt"], "--permission-mode", "acceptEdits", "--output-format", "json"]
-    if not control:
+    if not control and c.get("agent"):
         cmd += ["--agent", c["agent"]]
     if model:
         cmd += ["--model", model]
+    # What the case's work needs past acceptEdits (writes under .claude/ ask even then).
+    if c.get("allowed_tools"):
+        cmd += ["--allowedTools", *c["allowed_tools"]]
     p = subprocess.run(cmd, cwd=repo, capture_output=True, text=True, timeout=c.get("timeout", 900))
     if control:
         shutil.rmtree(os.path.join(repo, ".claude"), ignore_errors=True)

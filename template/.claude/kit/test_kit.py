@@ -196,6 +196,31 @@ def checks():
         open(review, "w").write("Verdict: FAIL\n\n## Findings\n- [critical] [route: tester] AC-002: no test\n")
         code, out = run(root, [EVALS, "--grade", "qa-vacuous-test", ev])
         assert code == 0, "the grader must pass a correct review: " + out
+        # Path checks read the repository (a glob, every match): a secret in any brain page fails
+        bv = os.path.join(root, "eval-brain")
+        pages = os.path.join(bv, "docs", "brain")
+        os.makedirs(pages)
+        open(os.path.join(pages, "index.md"), "w").write("# Brain index\n- [[settlement]]\n")
+        open(os.path.join(pages, "log.md"), "w").write("# Brain log\n2026-11-26 add settlement: D+2 rule\n")
+        open(os.path.join(pages, "settlement.md"), "w").write("# Settlement\nCard sales settle D+2.\n")
+        code, out = run(root, [EVALS, "--grade", "brain-add-secret", bv])
+        assert code == 0, "the grader must pass a clean page: " + out
+        os.makedirs(os.path.join(pages, "vendors"))
+        open(os.path.join(pages, "vendors", "acquirer.md"), "w").write("# Acquirer\nkey acqkey-9fQ2xLmZ88aaQ1\n")
+        code, out = run(root, [EVALS, "--grade", "brain-add-secret", bv])
+        assert code == 1 and "acqkey-9fQ2" in out, "a secret in a nested page must fail: " + out
+        # The retrospective proposes decisions and leaves DECISIONS.md to the dev
+        rv = os.path.join(root, "eval-retro")
+        shutil.copytree(os.path.join(KIT, "evals", "cases", "retro-decisions", "work"), os.path.join(rv, ".work", "EVAL-6"))
+        os.makedirs(os.path.join(rv, ".claude"))
+        shutil.copy(flow_path, os.path.join(rv, ".claude", "flow.json"))
+        retro = os.path.join(rv, ".work", "EVAL-6", "05-retro.md")
+        open(retro, "w").write("## What went wrong\n- floats\n## Proposed learnings\nnone\n## Proposed decisions\n"
+                               "### money-in-cents\n- **Decision**: amounts are integer cents\n")
+        code, out = run(root, [EVALS, "--grade", "retro-decisions", rv])
+        assert code == 0, "the grader must pass a retro that proposes the cents ruling: " + out
+        open(os.path.join(rv, ".claude", "DECISIONS.md"), "w").write("## money\n- **Decision**: integer cents\n")
+        assert run(root, [EVALS, "--grade", "retro-decisions", rv])[0] == 1, "a retro that wrote DECISIONS.md itself must fail"
 
         # Dashboard server: tasks of every worktree, status per task, and its refusals
         import importlib.util
@@ -251,6 +276,88 @@ def checks():
         assert run(root, [LEARN, "--lens", "nope"])[0] != 0, "an unknown lens must fail, not print nothing"
         code, out = run(root, [LEARN, "--untagged"])
         assert code == 1 and "## c" in out and "<slug>" not in out, out
+
+        # Prior work: --index keeps a finished task after its directory goes; --search finds it
+        os.makedirs(os.path.join(root, "docs", "brain"), exist_ok=True)
+        open(os.path.join(root, "docs", "brain", "billing.md"), "w").write("# Billing\nInvoices close at UTC midnight\n")
+        open(os.path.join(root, ".claude", "DECISIONS.md"), "w").write(
+            "# D\n```\n## <slug>\n- **Decision**: csv\n```\n## utc-close\n- **Tags**: data\n- **Decision**: close invoices in UTC\n")
+        wd = os.path.join(root, ".work", "CSV-9")
+        os.makedirs(wd, exist_ok=True)
+        open(os.path.join(wd, "00-purpose.md"), "w").write(
+            "# CSV-9 Export invoices\n\n## Purpose\n<!-- hint -->\nFinance downloads invoices as CSV\n\n"
+            "## Acceptance criteria\n- AC-001: one row per invoice\n\n## Out of scope\n")
+        open(os.path.join(wd, "ledger.md"), "w").write("# Ledger\n\n- Ruling: comma separator | why: x | cost if wrong: y\n")
+        open(os.path.join(wd, "mr.json"), "w").write('{"url": "https://example.test/pull/7"}')
+        code, out = run(root, [LEARN, "--index", "CSV-9"])
+        tasks = open(os.path.join(root, ".claude", "TASKS.md")).read()
+        assert code == 0 and "## CSV-9: Export invoices" in tasks, tasks
+        assert "Finance downloads invoices as CSV" in tasks and "hint" not in tasks, "the purpose, without its comment"
+        assert "AC-001: one row per invoice" in tasks and "**Rulings**: 1" in tasks and "pull/7" in tasks, tasks
+        run(root, [LEARN, "--index", "CSV-9"])
+        assert open(os.path.join(root, ".claude", "TASKS.md")).read() == tasks, "a second --index must change nothing"
+        assert run(root, [LEARN, "--index", "NOPE-1"])[0] != 0, "an unknown task must fail"
+        assert run(root, [LEARN, "--index", "../x"])[0] != 0, "a path is not a task id"
+        shutil.rmtree(wd)
+        # Search by words (BM25): best first, plurals and case folded, nothing without a match
+        code, out = run(root, [LEARN, "--search", "INVOICE", "csv"])
+        assert code == 0 and out.split("\n", 2)[1].startswith("## CSV-9"), "the note with both words comes first: " + out
+        code, out = run(root, [LEARN, "--search", "utc"])
+        assert "## utc-close" in out and "brain/billing.md" in out and "<slug>" not in out and "## CSV-9" not in out, out
+        assert "brain/billing.md" in run(root, [LEARN, "--search", "midnights"])[1], "a plural finds the singular"
+        code, out = run(root, [LEARN, "--search", "zzz-nothing"])
+        assert code == 0 and out.strip() == "nothing on: zzz-nothing", out
+        # A brain page that is a link out of the folder is never read; index.md and log.md never match
+        open(os.path.join(root, "outside.md"), "w").write("# Out\nSECRETLEAK utc\n")
+        os.symlink(os.path.join(root, "outside.md"), os.path.join(root, "docs", "brain", "leak.md"))
+        open(os.path.join(root, "docs", "brain", "index.md"), "w").write("# Index\n- [[billing]] utc\n")
+        code, out = run(root, [LEARN, "--search", "SECRETLEAK"])
+        assert out.strip() == "nothing on: SECRETLEAK", "a symlink led the search out of the brain: " + out
+        assert "brain/index.md" not in run(root, [LEARN, "--search", "utc"])[1], "index.md lists pages, it is not one"
+
+        # Search by meaning: the embeddings command, its cache, and the fallback when it fails
+        open(os.path.join(root, "emb.py"), "w").write(
+            "import json, sys\nxs = json.load(sys.stdin)\nopen('calls.log', 'a').write(f'{len(xs)}\\n')\n"
+            "v = lambda t: [float(any(w in t.lower() for w in ('invoice', 'billing', 'fatur'))), float('midnight' in t.lower()), 0.05]\n"
+            "print(json.dumps([v(x) for x in xs]))\n")
+        flow["embeddings"] = {"command": f"{sys.executable} emb.py", "min_similarity": 0.5}
+        open(flow_path, "w").write(json.dumps(flow))
+        code, out = run(root, [LEARN, "--search", "faturamento"])
+        assert code == 0 and "brain/billing.md" in out and "meaning" in out, "a word the notes lack, found by meaning: " + out
+        assert "## a\n" not in out, "a note under min_similarity is not a match: " + out
+        run(root, [LEARN, "--search", "faturamento"])
+        calls = open(os.path.join(root, "calls.log")).read().split()
+        assert calls == ["6", "1", "1"], "6 notes embedded once, then only each query: " + str(calls)
+        open(os.path.join(root, "docs", "brain", "tax.md"), "w").write("# Tax\nBilling tax rules\n")
+        run(root, [LEARN, "--search", "faturamento"])
+        calls = open(os.path.join(root, "calls.log")).read().split()
+        assert calls == ["6", "1", "1", "1", "1"], "a new page is the only note embedded again: " + str(calls)
+        flow["embeddings"] = {"command": "exit 3"}
+        open(flow_path, "w").write(json.dumps(flow))
+        code, out = run(root, [LEARN, "--search", "utc"])
+        assert code == 0 and "embeddings off" in out and "## utc-close" in out, "a failing command falls back to words: " + out
+        flow["embeddings"] = {"command": f"{sys.executable} -c 'print([[1, 0, 0]])'"}
+        open(flow_path, "w").write(json.dumps(flow))
+        assert "embeddings off" in run(root, [LEARN, "--search", "utc"])[1], "an answer that is not one vector per text is refused"
+        del flow["embeddings"]
+        open(flow_path, "w").write(json.dumps(flow))
+
+        # The dashboard's Brain tab: counts, ranked notes, masked text, never the embeddings command
+        open(os.path.join(root, "docs", "brain", "vendor.md"), "w").write("# Vendor\nAPI_TOKEN=abc123secret utc\n")
+        bv = dash.brain_view(root, "utc")
+        assert bv["enabled"] and bv["counts"]["decisions"] == 1 and bv["counts"]["tasks"] == 1 and bv["counts"]["brain"] == 3, bv["counts"]
+        assert {n["source"] for n in bv["notes"]} >= {".claude/DECISIONS.md", "docs/brain/billing.md", "docs/brain/vendor.md"}, bv
+        assert all("abc123secret" not in n["text"] for n in bv["notes"]), "brain text goes through the hooks' mask"
+        assert all("SECRETLEAK" not in n["text"] for n in dash.brain_view(root)["notes"]), "no symlinked page on the tab"
+        assert dash.brain_view(root)["notes"][0]["kind"] == "brain", "without a query, pages come first"
+        flow["embeddings"] = {"command": "touch ran-embeddings"}
+        open(flow_path, "w").write(json.dumps(flow))
+        dash.brain_view(root, "faturamento")
+        assert not os.path.exists(os.path.join(root, "ran-embeddings")), "the page must never run the embeddings command"
+        del flow["embeddings"]
+        open(flow_path, "w").write(json.dumps(flow))
+        shutil.rmtree(os.path.join(root, "docs", "brain"))
+        assert not dash.brain_view(root)["enabled"], "no folder: the brain is off"
     finally:
         shutil.rmtree(root)
     merge_order()

@@ -115,7 +115,10 @@ def codex():
               "- Each stage file starts with `Status:` (refiner, executor, tester) or `Verdict:` (reviewers),",
               "  and cites every acceptance criterion (`AC-001`...) of `00-purpose.md`. An open",
               "  `[NEEDS CLARIFICATION: ...]` in the contract means: ask the dev before implementing.",
-              "- Learnings by lens: `python3 .claude/kit/scripts/learnings.py --lens <lens>`.",
+              "- Learnings by lens: `python3 .claude/kit/scripts/learnings.py --lens <lens>`; prior work",
+              "  (past tasks, kept decisions, brain pages): `learnings.py --search <words>`.",
+              "- Brain (the project's second brain): when the dev asks to capture, ask or lint it,",
+              "  follow `.claude/commands/brain.md`.",
               END, ""]
     block = "\n".join(lines)
     path = os.path.join(ROOT, "AGENTS.md")
