@@ -6,6 +6,10 @@
   "brain": "docs/brain",
   "product_sources": ".claude/product-sources.md",
   "max_fix_rounds": 3,
+  "models": {
+    "light": {"*": "sonnet", "refiner": "opus", "security-reviewer": "opus"},
+    "none": {"*": "sonnet", "security-reviewer": "opus"}
+  },
   "checks": [],
   "ship": {"enabled": false, "tool": "auto", "push": true, "draft": true, "command": ""},
   "language": "en",

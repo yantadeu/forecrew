@@ -40,6 +40,11 @@
 #                                      serves every project. Needs FORECREW_TELEGRAM_TOKEN and
 #                                      FORECREW_TELEGRAM_CHAT in the shell that starts it
 #        work.sh telegram chat-id      the chat id of the last messages sent to your bot
+#        work.sh notify [on|off|test]  a desktop notification (macOS, or Linux with notify-send) when
+#                                      a session waits on you and no dashboard or Telegram bridge is
+#                                      open; for every project of this user. Default off. test sends one
+#        work.sh second-opinion        the review package to another vendor's CLI (codex, gemini or
+#                                      "second_opinion" in flow.json), for the second-opinion reviewer
 # Exit codes: 0 ok, 1 a check failed, 2 configuration or usage error.
 set -euo pipefail
 
@@ -210,6 +215,22 @@ EOF
       *) echo "usage: work.sh telegram start|stop|status|chat-id" >&2; exit 2 ;;
     esac
     ;;
+  notify)
+    flag="${FORECREW_HOME:-$HOME/.forecrew}/notify-on"
+    case "${2:-}" in
+      on) mkdir -p "$(dirname "$flag")" && touch "$flag" && echo "desktop notifications on (every project of this user)" ;;
+      off) rm -f "$flag" && echo "desktop notifications off" ;;
+      test)
+        if [ "$(uname)" = Darwin ]; then osascript -e 'display notification "Notifications work." with title "Forecrew"'
+        elif command -v notify-send >/dev/null; then notify-send --app-name=Forecrew Forecrew "Notifications work."
+        else echo "no notifier: macOS has osascript, Linux needs notify-send (libnotify)" >&2; exit 2; fi
+        echo "sent; nothing showed: allow notifications for your terminal (macOS: System Settings > Notifications)" ;;
+      "") if [ -f "$flag" ]; then echo on; else echo off; fi ;;
+      *) echo "usage: work.sh notify [on|off|test]" >&2; exit 2 ;;
+    esac
+    ;;
+  second-opinion)
+    exec python3 "$(dirname "$0")/second_opinion.py" "$root" "$work" ;;
   ui)
     pidf="$work/ui.pid"
     case "${2:-}" in
@@ -313,5 +334,5 @@ sys.exit(1)') || { echo "no free port in 8787-8799" >&2; exit 2; }
         ;;
     esac
     ;;
-  *) sed -n 2,43p "$0"; exit 2 ;;
+  *) sed -n 2,48p "$0"; exit 2 ;;
 esac

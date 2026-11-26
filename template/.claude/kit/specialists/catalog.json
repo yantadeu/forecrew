@@ -14,5 +14,9 @@
   {"name": "api-compat-reviewer", "lens": "api", "room": "review", "color": "#fde047", "emblem": "globe", "tags": ["api", "integration"],
    "label": {"en": "API compatibility reviewer", "pt": "Revisor de compatibilidade de API"},
    "pitch": {"en": "Breaking changes to what others call: removed fields, new required inputs, changed errors, events and versions.",
-             "pt": "Quebras no que outros chamam: campos removidos, entradas novas obrigatórias, erros, eventos e versões que mudaram."}}
+             "pt": "Quebras no que outros chamam: campos removidos, entradas novas obrigatórias, erros, eventos e versões que mudaram."}},
+  {"name": "second-opinion-reviewer", "lens": "second-opinion", "room": "review", "color": "#38bdf8", "emblem": "gear", "tags": [],
+   "label": {"en": "Second-opinion reviewer", "pt": "Revisor de segunda opinião"},
+   "pitch": {"en": "Another vendor's model (Codex, Gemini) reads the same change; only the findings confirmed in the code stay.",
+             "pt": "O modelo de outro fornecedor (Codex, Gemini) lê a mesma mudança; ficam só os achados confirmados no código."}}
 ]

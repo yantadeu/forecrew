@@ -58,6 +58,11 @@ Close the triage with `AskUserQuestion`: one option per lane, the recommended on
 label ending in "(Recommended)" and the why in its description. A question can be answered from
 the dashboard when the dev opted in; a free-text "ok" cannot. Then:
 
+**Models.** The lane also picks the model of each stage (`models` in `flow.json`; the hook sets
+it on the Agent call, so never pass `model` yourself). When the dev asks for one model for the
+whole task ("use opus on this one"), write `Model: <haiku|sonnet|opus|fable>` under the `Lane:`
+line; it wins over the lane's table. `work.sh status` shows the model of each routed stage.
+
 ```
 bash .claude/kit/scripts/work.sh init <ID> "<title>"
 ```
@@ -180,8 +185,10 @@ are decided:
 2. Show the dev the verdicts, the "Out of purpose" items, the rulings in `ledger.md`, and the
    proposals. Ask with `AskUserQuestion` `multiSelect` which to keep, then append the approved
    learnings to the learnings file, the approved decisions to the decisions file (`decisions` in
-   `flow.json`; mark one it replaces `Superseded by: <slug>`), and apply the approved brain
-   updates as `/brain add` would. Nothing the dev did not check is written.
+   `flow.json`; mark one it replaces `Superseded by: <slug>`), apply the approved brain
+   updates as `/brain add` would, and the approved tidy items (a merge replaces both entries
+   with the merged one, a drop deletes the entry, a tag adds its line). Nothing the dev did not
+   check is written.
 3. `python3 .claude/kit/scripts/learnings.py --index <ID>` adds the task to the tasks file
    (purpose, criteria, PR), so a later task finds it after this one's work directory is deleted.
 

@@ -142,7 +142,8 @@ footer a{color:var(--ink2)}
         <tr><td>The goal drifts when the conversation is summarized.</td><td>It lives in <code>00-purpose.md</code>, with criteria <code>AC-001</code>, <code>AC-002</code>… that every stage cites.</td></tr>
         <tr><td>The agent picks between two readings on its own.</td><td>It writes <code>[NEEDS CLARIFICATION]</code> and asks you, one question at a time. Nothing is built on a guess.</td></tr>
         <tr><td>"Tests pass."</td><td>The tester reverts the fix and shows each test failing without it. Lint, build and tests run on the exact diff before any review.</td></tr>
-        <tr><td>One context checks its own work.</td><td>Contract, security, QA and product reviewers run in parallel, each in a clean context, on the same diff.</td></tr>
+        <tr><td>One context checks its own work.</td><td>Contract, security, QA and product reviewers run in parallel, each in a clean context, on the same diff. Optionally, another vendor's model reads it too.</td></tr>
+        <tr><td>Every stage on the most expensive model.</td><td>The lane picks each stage's model: Opus where the risk is, Sonnet where the work is routine. The Costs tab shows whether the cheaper runs needed more fix rounds.</td></tr>
         <tr><td>Decisions you never saw.</td><td>Every ruling taken without you goes in <code>ledger.md</code>, with what it costs if wrong.</td></tr>
         <tr><td>"Done."</td><td>Done means a pull request exists, or you closed the task yourself.</td></tr>
         <tr><td>Watching five terminals.</td><td>One page lists every task of every worktree. What needs you is at the top, and you can answer it there.</td></tr>
@@ -176,9 +177,9 @@ footer a{color:var(--ink2)}
   <div class="figs">
     <figure><img loading="lazy" src="assets/gifs/handoff.gif" width="1280" height="800" alt="A toast announces the executor handed over 02-change.md; See in Steps jumps to the step"><figcaption><b>Fig. 2.</b> When a stage lands, a notice says who handed over what. Each step carries a two-line digest and the criteria it cites.</figcaption></figure>
     <figure><img loading="lazy" src="assets/gifs/evidence.gif" width="1280" height="800" alt="Screenshots under the proof step, opened full size and paged with the arrow keys"><figcaption><b>Fig. 3.</b> Screenshots the tester took for visual criteria, under the proof. The QA reviewer checks they show what is claimed.</figcaption></figure>
-    <figure><img loading="lazy" src="assets/gifs/costs.gif" width="1280" height="800" alt="Tokens and cost per agent for a task, then every task compared on the Costs tab"><figcaption><b>Fig. 4.</b> Tokens and API-equivalent cost per agent and per task, read from the session transcripts.</figcaption></figure>
+    <figure><img loading="lazy" src="assets/gifs/costs.gif" width="1280" height="800" alt="Tokens and cost per agent for a task, then the Costs tab: every task compared, where the tokens go, and quality by lane and executor model"><figcaption><b>Fig. 4.</b> Tokens and API-equivalent cost per agent and per task, and next to it the rework: fix rounds and stages sent back per lane and executor model, so a cheaper model shows whether it cost quality.</figcaption></figure>
     <figure><img loading="lazy" src="assets/gifs/fork.gif" width="1280" height="800" alt="Typing an ID builds the command that creates a worktree and opens a session in it"><figcaption><b>Fig. 5.</b> <code>work.sh fork HOTFIX-9</code>: a second task in its own worktree while the first goes on.</figcaption></figure>
-    <figure><img loading="lazy" src="assets/gifs/hire.gif" width="1280" height="800" alt="Cards for the performance, accessibility, migration and API compatibility reviewers, each with its command"><figcaption><b>Fig. 6.</b> Extra reviewers you can add with <code>/flow-agent add &lt;name&gt;</code>: performance, accessibility, data migrations, API compatibility.</figcaption></figure>
+    <figure><img loading="lazy" src="assets/gifs/hire.gif" width="1280" height="800" alt="Cards for the performance, accessibility, migration, API compatibility and second-opinion reviewers, each with its command"><figcaption><b>Fig. 6.</b> Extra reviewers you can add with <code>/flow-agent add &lt;name&gt;</code>: performance, accessibility, data migrations, API compatibility, and a second opinion from another vendor's model (Codex, Gemini).</figcaption></figure>
     <figure><img loading="lazy" src="assets/gifs/brain.gif" width="1280" height="800" alt="The Brain tab: a search for refund finds a brain page, the task that changed it and a decision; a search for cents opens the money-in-cents decision"><figcaption><b>Fig. 7.</b> The Brain tab: brain pages, kept decisions, finished tasks and learnings, searched as you type.</figcaption></figure>
     <figure><img loading="lazy" src="assets/screenshots/now.jpg" width="1280" height="800" alt="The executor asks permission to run a command, with Approve and Details"><figcaption><b>Fig. 8.</b> A permission request waiting on you. Answer it on the page, in the terminal, or on Telegram.</figcaption></figure>
   </div>
@@ -196,6 +197,7 @@ footer a{color:var(--ink2)}
         <tr><td>Agents</td><td>subagents</td><td>rules</td><td>role files in <code>AGENTS.md</code></td><td><code>.github/agents/</code></td></tr>
         <tr><td>Reviewers in parallel</td><td>yes</td><td>one chat each</td><td>one session each</td><td>one chat each</td></tr>
         <tr><td>Gates</td><td>live hook</td><td><code>work.sh status</code></td><td><code>work.sh status</code></td><td><code>work.sh status</code></td></tr>
+        <tr><td>Model per lane</td><td>set by the hook</td><td>the agent's own</td><td>the agent's own</td><td>the agent's own</td></tr>
         <tr><td>Dashboard</td><td>stages, rulings, live agents</td><td>stages, rulings</td><td>stages, rulings</td><td>stages, rulings</td></tr>
       </tbody>
     </table>

@@ -50,6 +50,10 @@ Write `05-retro.md`:
   default `docs/brain`). A concept of the domain or the system the task had to discover,
   as the page `/brain add` would write or the lines to add to an existing page, with this task
   as its source. Follow `.claude/commands/brain.md` for what a page holds.
+- `## Proposed tidy`: only when `python3 .claude/kit/scripts/learnings.py --tidy` lists
+  something. For each `merge`, the one entry that replaces both (same format, the better slug,
+  every fact of both kept); for each `drop`, the slug and why; for each `tag`, the Tags line to
+  add. The files only grow otherwise, and every agent pays to read them.
 - `## Kit changes`: a stage, gate or prompt that should change because of this task, if any.
 
 Nothing worth keeping is a valid answer; do not invent a learning to fill the file. Answer the
