@@ -1,0 +1,10 @@
+{
+  "id": "EVAL-7",
+  "agent": "refiner",
+  "prompt": "Work dir .work/EVAL-7. Straightforward one, write the contract.",
+  "checks": [
+    {"gate": "refiner"},
+    {"file": "01-contract.md", "re": "NEEDS CLARIFICATION[^\\]]*(cent|money-in-cents)", "why": "the purpose contradicts the kept decision money-in-cents: the dev decides, not the refiner"},
+    {"file": "01-contract.md", "section": "Sources read", "re": "money-in-cents|DECISIONS", "why": "the prior work found is named"}
+  ]
+}

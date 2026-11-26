@@ -16,6 +16,8 @@ directory of each worktree from `git worktree list` and serves:
   GET  /api/usage                    every task's tokens and API-equivalent cost, per agent type
   GET  /api/evidence?wt=<n>&id=<ID>&f=<name>   one screenshot of <ID>/evidence/ (png, jpg, gif, webp)
   GET  /api/specialists              the catalog of specialists /flow-agent add installs
+  GET  /api/brain?q=<text>           the brain: learnings, kept decisions, finished tasks and brain
+                                     pages, best first for a query (by words only, see brain_view)
   GET  /api/projects                 every project of the registry (one dashboard serves them all):
                                      its name, its alert count, whether a session is alive there
 
@@ -79,6 +81,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import decisions  # noqa: E402  who acts on each finding; the session told of page decisions
+import learnings  # noqa: E402  the brain's notes (learnings, decisions, tasks, pages) and their search
 
 # The hooks' own masking and turn classifier, from the server's copy of the kit (never a
 # worktree's copy, whose hook may be older or edited).
@@ -1647,6 +1650,33 @@ def evidence_file(root, wt_index, tid, name):
 SPECIALISTS = os.path.join(KIT, "specialists", "catalog.json")
 
 
+def brain_view(root, query=""):
+    """The Brain tab: how many notes of each kind, and the notes, best first for a query.
+
+    By words only: the page searches as the dev types, and the embeddings command of flow.json
+    (a model call, maybe paid) never runs per keystroke; `learnings.py --search` searches by
+    meaning. Texts get the hooks' mask, like every file the page shows."""
+    flow = flow_of(root)
+    query = (query or "").strip()[:200]
+    if not flow:
+        return {"enabled": False, "counts": {}, "notes": [], "query": query}
+    try:
+        all_notes = learnings.notes(root, flow)
+    except OSError:
+        all_notes = []
+    counts = {k: sum(n["kind"] == k for n in all_notes) for k in ("brain", "decisions", "tasks", "learnings")}
+    if query:
+        _, shown = learnings.search(root, flow, query, limit=50, semantic=False)
+    else:
+        # Pages first, then what is newest: entries are appended, so the last one is the latest.
+        rank = {"brain": 0, "decisions": 1, "tasks": 2, "learnings": 3}
+        shown = sorted(enumerate(all_notes), key=lambda x: (rank[x[1]["kind"]], -x[0] if x[1]["kind"] != "brain" else x[0]))
+        shown = [n for _, n in shown][:200]
+    return {"enabled": os.path.isdir(learnings.path_of(root, flow, "brain")), "counts": counts, "query": query,
+            "notes": [{k: n.get(k) for k in ("kind", "source", "title", "tags", "score")} | {"text": mask_text(n["text"])}
+                      for n in shown]}
+
+
 def specialists(root):
     """The catalog, each entry marked installed when the project already has that agent."""
     try:
@@ -2464,6 +2494,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send(200, json.dumps(list_tasks(root)), "application/json")
         if url.path == "/api/usage":
             return self.send(200, json.dumps(project_usage(root)), "application/json")
+        if url.path == "/api/brain":
+            return self.send(200, json.dumps(brain_view(root, (q.get("q") or [""])[0])), "application/json")
         if url.path == "/api/specialists":
             return self.send(200, json.dumps(specialists(root)), "application/json")
         if url.path == "/api/evidence":

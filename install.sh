@@ -4,7 +4,7 @@
 # Usage: install.sh <target-repo> [--tools claude,cursor,codex,copilot] [--replace]   (default: claude,cursor,codex)
 #
 # Kit files (.claude/kit/) are replaced on every run. Everything a project adapts (the seven
-# agents, flow.json, product-sources.md, LEARNINGS.md, the task skill, the commands) is
+# agents, flow.json, product-sources.md, LEARNINGS.md, DECISIONS.md, TASKS.md, the task skill, the commands) is
 # created only when missing. When yours differs it is kept, unless --replace: then yours is
 # moved to .agent-flow-backup/<time>/ first. The kit's originals stay in .claude/kit/originals/
 # for comparing and merging. Hooks are merged into .claude/settings.json once. At the end it
@@ -43,7 +43,7 @@ copy_once() {  # <relative path under .claude>
     echo "replaced .claude/$1 (yours: ${backup#"$target"/}/.claude/$1)"
   else echo "kept     .claude/$1 (yours differs; kit's version: .claude/kit/originals/$1)"; fi
 }
-(cd "$src" && find agents commands skills -type f; echo flow.json; echo product-sources.md; echo LEARNINGS.md) |
+(cd "$src" && find agents commands skills -type f; echo flow.json; echo product-sources.md; echo LEARNINGS.md; echo DECISIONS.md; echo TASKS.md) |
   while read -r f; do copy_once "$f"; done
 
 if [[ ",$tools," == *",claude,"* ]]; then

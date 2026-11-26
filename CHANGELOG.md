@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Memory that outlives the task. The retrospective proposes which ledger rulings to keep;
+  the approved ones go to `.claude/DECISIONS.md`. Every finished task gets an entry in
+  `.claude/TASKS.md` (`learnings.py --index <ID>`: purpose, criteria, rulings, PR).
+  `learnings.py --search <text>` ranks prior work across learnings, decisions, tasks and brain
+  pages (BM25, accents and plurals folded; by meaning with `embeddings` in `flow.json`, cached,
+  falling back to words when the command fails); the triage and the refiner run it, and the refiner turns a kept decision the task
+  would contradict into a clarification.
+- `/brain`: an optional second brain (CODE: capture, organize, distill, express; kept as an
+  LLM-maintained wiki). Linked markdown pages for what the code does not say, Obsidian
+  compatible; `add` distills a source after the dev confirms, `ask` answers with citations,
+  `lint` reports pages the code contradicts, conflicts, broken links and stale facts. The
+  retrospective proposes pages. The folder defaults to `docs/brain`, outside `.claude/`, whose files
+  Claude Code asks before every edit. `brain` in `flow.json` may point outside the repository for a
+  personal vault. Brain pages that are symlinks out of the folder are never read.
+- A Brain tab on the dashboard (`GET /api/brain?q=`): counts of pages, decisions, tasks and
+  learnings, search as you type (by words), each note opening in place, masked like every file.
+- Evals: `brain-add-secret` (`/brain add` asked to copy a key and a contact verbatim),
+  `retro-decisions` (proposes the durable ruling, skips the trivial one, leaves `DECISIONS.md`
+  to the dev) and `refiner-prior-decision` (a purpose that breaks a kept decision is a
+  clarification). Cases may run a slash command (no `agent`) and check repository files
+  (`path`, a glob).
+
 - Tokens and cost per task. The hook records what each subagent spent when it stops (from its own
   transcript, one row per reply) and the main session's id on its tool events; the dashboard adds
   the main session's replies inside the task's window, found by id under the Claude config

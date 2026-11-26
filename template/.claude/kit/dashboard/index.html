@@ -129,6 +129,8 @@
   .chip { display:inline-flex; align-items:center; gap:6px; border-radius:3px; background:var(--card2) }
   .chip.ok, .chip.PASS { border-color:var(--ok); color:var(--ok) } .chip.running { border-color:var(--run); color:var(--run) }
   .chip.FAIL, .chip.failed, .chip.blocked { border-color:var(--bad); color:var(--bad) } .chip.PASS_WITH_FINDINGS { border-color:var(--warn); color:var(--warn) } .chip.pending { color:var(--mute) }
+  #brain-q { width:100%; margin:0 0 8px } .bnote { border:1px solid var(--line); border-radius:4px; padding:6px 8px; margin:0 0 6px; cursor:pointer }
+  .bnote .kind { font-size:11px; text-transform:uppercase; color:var(--mute); margin-right:6px } .bnote pre.file { margin:6px 0 0; cursor:auto }
   pre.file { background:var(--card); border:1px solid var(--line); border-radius:4px; padding:12px; white-space:pre-wrap; overflow-wrap:anywhere; max-height:60vh; overflow:auto }
   .rulings div { overflow-wrap:anywhere; font-size:12px; padding:3px 0; border-top:1px dashed var(--line) }
   table { border-collapse:collapse; width:100% } td { border-top:1px solid var(--line); padding:4px 6px; vertical-align:top; font-size:12px } td.d { overflow-wrap:anywhere }
@@ -390,7 +392,7 @@
 </div>
 </section>
 <div class="meta" id="legend" style="margin-top:8px"></div>
-<div class="tabs"><button type="button" data-tab="tree" data-i18n="tab.tree">Steps</button><button type="button" data-tab="office" data-i18n="tab.office">Office</button><button type="button" data-tab="cost" data-i18n="tab.cost">Costs</button></div>
+<div class="tabs"><button type="button" data-tab="tree" data-i18n="tab.tree">Steps</button><button type="button" data-tab="office" data-i18n="tab.office">Office</button><button type="button" data-tab="cost" data-i18n="tab.cost">Costs</button><button type="button" data-tab="brain" data-i18n="tab.brain">Brain</button></div>
 <div id="pane-task">
 <h1 id="title">Forecrew</h1>
 <div class="where" id="where"></div>
@@ -404,6 +406,7 @@
 </div>
 <div id="pane-crew" hidden><div id="pop"></div><h3 class="crew-h" data-i18n="h.crew">Crew</h3><div id="crew-list"></div><h3 class="crew-h" id="hire-h" data-i18n="h.hire" hidden>Hire a specialist</h3><div id="hire" class="hire"></div></div>
 <div id="pane-cost" hidden><div id="cost"></div></div>
+<div id="pane-brain" hidden><input type="search" id="brain-q" autocomplete="off"><div id="brain"></div></div>
 <a class="credit" href="https://github.com/yantadeu/forecrew" target="_blank" rel="noopener" data-i18n="brand.credit">Forecrew by Yan Tadeu · Apache-2.0</a>
 </section>
 </div>
@@ -875,6 +878,14 @@ const I18N = /* i18n:begin */{
   "status.triage.m": "The session is in the triage: it asks the lane and the interview before the task's purpose is written.",
   "tl.triage": "triage",
   "tab.cost": "Costs",
+  "tab.brain": "Brain",
+  "brain.search": "Search the brain: past tasks, decisions, learnings, pages",
+  "brain.loading": "Reading the brain…",
+  "brain.empty": "Nothing kept yet. Finished tasks, approved decisions and learnings land here; /brain on starts the pages.",
+  "brain.none": "Nothing matches.",
+  "brain.off": "No brain pages: /brain on in a session creates the folder.",
+  "brain.kind.brain": "Page", "brain.kind.decisions": "Decision", "brain.kind.tasks": "Task", "brain.kind.learnings": "Learning",
+  "brain.n.brain": "Pages", "brain.n.decisions": "Decisions", "brain.n.tasks": "Tasks", "brain.n.learnings": "Learnings",
   "h.usage": "Tokens and cost",
   "h.hire": "Hire a specialist",
   "usage.cost": "API-equivalent cost",
@@ -1379,6 +1390,14 @@ const I18N = /* i18n:begin */{
   "status.triage.m": "A sessão está na triagem: pergunta a trilha e faz a entrevista antes de escrever o propósito da tarefa.",
   "tl.triage": "triagem",
   "tab.cost": "Custos",
+  "tab.brain": "Cérebro",
+  "brain.search": "Busque no cérebro: tarefas passadas, decisões, aprendizados, páginas",
+  "brain.loading": "Lendo o cérebro…",
+  "brain.empty": "Nada guardado ainda. Tarefas finalizadas, decisões aprovadas e aprendizados chegam aqui; /brain on inicia as páginas.",
+  "brain.none": "Nada encontrado.",
+  "brain.off": "Sem páginas no cérebro: /brain on numa sessão cria a pasta.",
+  "brain.kind.brain": "Página", "brain.kind.decisions": "Decisão", "brain.kind.tasks": "Tarefa", "brain.kind.learnings": "Aprendizado",
+  "brain.n.brain": "Páginas", "brain.n.decisions": "Decisões", "brain.n.tasks": "Tarefas", "brain.n.learnings": "Aprendizados",
   "h.usage": "Tokens e custo",
   "h.hire": "Contrate um especialista",
   "usage.cost": "Custo equivalente na API",
@@ -1563,6 +1582,7 @@ function applyLang() {
   $("side-grip").setAttribute("aria-label", t("side.grip")); $("side-gear").textContent = "⚙"; $("side-gear").title = t("side.gear"); $("side-gear").setAttribute("aria-label", t("side.gear"));
   $("side-fork").title = t("fork.button"); $("side-fork").setAttribute("aria-label", t("fork.button"));
   $("lightbox").setAttribute("aria-label", t("lb.title"));
+  $("brain-q").placeholder = t("brain.search"); $("brain-q").setAttribute("aria-label", t("brain.search"));
   forkPop(); renderHire();
   applySide();
   notifyState(); muteLabel(); applyTheme(); liveLabel();
@@ -2332,13 +2352,14 @@ async function tellDecided(d, wt, ok) {
 // file under it when the dev opens it. The node the task is at says "you are here".
 // The world is always on screen ("office"); the side panel shows the task ("tree") or the crew.
 let tab = "office", pane = "tree";
-try { const v = localStorage.getItem("agent-flow-tab"); pane = v === "office" || v === "cost" ? v : "tree" } catch (e) {}
+try { const v = localStorage.getItem("agent-flow-tab"); pane = ["office", "cost", "brain"].includes(v) ? v : "tree" } catch (e) {}
 function setTab(name) {
   pane = name;
   try { localStorage.setItem("agent-flow-tab", pane) } catch (e) {}
-  $("pane-task").hidden = pane !== "tree"; $("pane-crew").hidden = pane !== "office"; $("pane-cost").hidden = pane !== "cost";
+  $("pane-task").hidden = pane !== "tree"; $("pane-crew").hidden = pane !== "office"; $("pane-cost").hidden = pane !== "cost"; $("pane-brain").hidden = pane !== "brain";
   // After the script has run: the cost view's state is declared further down.
   if (pane === "cost") setTimeout(() => loadUsage(true));
+  if (pane === "brain") setTimeout(() => loadBrain());
   document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === pane));
 }
 setTab(pane);
@@ -3192,6 +3213,38 @@ function renderCost() {
     r.onclick = go; r.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go() } };
   });
 }
+
+// The brain: what outlives the tasks (pages, kept decisions, finished tasks, learnings), searched
+// by words as the dev types. Read on the Brain tab only; a note opens on click.
+let brainData = null, brainSeq = 0, brainTimer = 0;
+const brainOpen = new Set();
+async function loadBrain() {
+  if (pane !== "brain") return;
+  const seq = ++brainSeq, q = $("brain-q").value.trim();
+  try {
+    const d = await getJSON("api/brain" + (q ? "?q=" + encodeURIComponent(q) : ""));
+    if (seq === brainSeq) brainData = d || { notes: [], counts: {} };
+  } catch (e) { if (seq === brainSeq) brainData = brainData || { notes: [], counts: {} } }
+  if (seq === brainSeq) renderBrain();
+}
+function renderBrain() {
+  if (brainData == null) { setHTML($("brain"), `<div class="meta">${t("brain.loading")}</div>`); return }
+  const c = brainData.counts || {}, kinds = ["brain", "decisions", "tasks", "learnings"];
+  const total = kinds.reduce((a, k) => a + (c[k] || 0), 0);
+  const head = tiles(kinds.map(k => [t("brain.n." + k), String(c[k] || 0), ""])) + (brainData.enabled ? "" : `<div class="meta">${t("brain.off")}</div>`);
+  if (!total) { setHTML($("brain"), head + `<div class="meta">${t("brain.empty")}</div>`); return }
+  const notes = brainData.notes || [];
+  setHTML($("brain"), head + (notes.length ? notes.map(n => {
+    const key = n.source + "#" + n.title;
+    return `<div class="bnote" data-note="${esc(key)}" tabindex="0" role="button" aria-expanded="${brainOpen.has(key)}"><span class="kind">${t("brain.kind." + n.kind)}</span><b>${esc(n.title)}</b> <span class="meta">${esc(n.source)}</span>` +
+      (brainOpen.has(key) ? `<pre class="file">${esc(n.text)}</pre>` : "") + `</div>`;
+  }).join("") : `<div class="meta">${t("brain.none")}</div>`));
+  $("brain").querySelectorAll("[data-note]").forEach(el => {
+    const flip = (e) => { if (e.target.closest("pre")) return; const k = el.dataset.note; brainOpen.has(k) ? brainOpen.delete(k) : brainOpen.add(k); renderBrain() };
+    el.onclick = flip; el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(e) } };
+  });
+}
+$("brain-q").oninput = () => { clearTimeout(brainTimer); brainTimer = setTimeout(loadBrain, 250) };
 
 // The worktree's switches: answering questions on the page, and sending the session its next
 // message on the page. Turning one on or off asks first, saying what changes and the risk.

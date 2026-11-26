@@ -391,7 +391,19 @@ def preferences(page):
         "the project list is not scoped, and another project that starts waiting on the dev chimes"
 
 
-CHECKS = (calm_panel, top_bar, sidebar, needs_list, findings_fold, whole_finding, quiet_turns, whole_turn, visible_page, released_holds, not_applicable, both_languages, every_word_translated, whole_commands, answers_from_the_page, office, findings_panel, now_panel, tree, switches_on_page,
+def brain_tab(page):
+    """The Brain tab reads /api/brain only while it is on screen, escapes every note, and has its
+    words in both languages."""
+    assert 'data-tab="brain" data-i18n="tab.brain"' in page and '$("pane-brain").hidden = pane !== "brain"' in page
+    assert 'if (pane !== "brain") return;' in page and 'getJSON("api/brain"' in page, "read on the Brain tab only, scoped and with the token"
+    assert '<pre class="file">${esc(n.text)}</pre>' in page and "<b>${esc(n.title)}</b>" in page, "a note is the project's text: escaped"
+    assert "if (seq === brainSeq) brainData = d || " in page, "a slow answer to an older search never replaces a newer one"
+    d = dictionary(page)
+    for k in ("tab.brain", "brain.search", "brain.empty", "brain.none", "brain.off", "brain.kind.decisions", "brain.n.tasks"):
+        assert k in d["en"] and k in d["pt"], k
+
+
+CHECKS = (brain_tab, calm_panel, top_bar, sidebar, needs_list, findings_fold, whole_finding, quiet_turns, whole_turn, visible_page, released_holds, not_applicable, both_languages, every_word_translated, whole_commands, answers_from_the_page, office, findings_panel, now_panel, tree, switches_on_page,
           noise_collapsed, cleanup_wiring, preferences)
 
 
@@ -403,6 +415,10 @@ def drop_key(page, lang, key):
 
 
 MUTATIONS = (
+    (brain_tab, "a note's text raw", lambda p: p.replace('<pre class="file">${esc(n.text)}</pre>', '<pre class="file">${n.text}</pre>')),
+    (brain_tab, "brain read on every tab", lambda p: p.replace('if (pane !== "brain") return;', '')),
+    (brain_tab, "stale search wins", lambda p: p.replace("if (seq === brainSeq) brainData = d", "brainData = d")),
+    (brain_tab, "a PT brain word removed", lambda p: drop_key(p, "pt", "brain.empty")),
     (both_languages, "a PT status removed", lambda p: drop_key(p, "pt", "status.fixing")),
     (both_languages, "a PT room removed", lambda p: drop_key(p, "pt", "room.workshop")),
     (both_languages, "an action label removed", lambda p: drop_key(drop_key(p, "en", "action.approve-on-page"), "pt", "action.approve-on-page")),

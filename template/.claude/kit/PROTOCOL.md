@@ -20,7 +20,8 @@ orchestrator only carries paths and one-line statuses.
   checks.md                 work.sh checks (review-package runs it): the project's lint, build and
                             test commands run by the machine, with a fingerprint of the tree
   04-review-<lens>.md       one per reviewer lens, written in parallel
-  05-retro.md               retrospective: what went wrong, proposed learnings
+  05-retro.md               retrospective: what went wrong, proposed learnings, decisions and
+                            brain updates
   findings-decision.md      orchestrator, after the dev picked which findings get fixed
   closed                    `work.sh done`: the task closed without (or before) a PR/MR
   branch                    `work.sh init`: the branch the task started on, its PR/MR lookup's
@@ -221,6 +222,12 @@ reused branch name whose old PR/MR was merged still marks the current task done.
 
 Once a task is done, the session suggests `/clear` (or a new session) before the next task:
 the context of a finished task is noise for the next one.
+
+**What outlives the task.** `.work/<ID>` is deleted at cleanup, so what is worth keeping
+leaves it first, after the dev approves it: learnings to `LEARNINGS.md`, rulings to
+`DECISIONS.md`, concepts to the brain folder (`/brain`, optional), and one entry per task to
+`TASKS.md` (`learnings.py --index <ID>`). `learnings.py --search <words>` reads all four; the
+triage and the refiner run it so a new task starts from prior work.
 
 **Cleanup.** Learnings first: the retrospective runs and the dev approves its learnings before
 anything is deleted, since the evidence goes with the task (the plan warns when it has not

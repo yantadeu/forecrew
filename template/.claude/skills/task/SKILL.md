@@ -32,8 +32,10 @@ the last item of someone else's checklist. The protocol every agent follows is
    contains it (`feat/csv-export`).
 2. **Product sources.** Sync the sources of `.claude/product-sources.md` that decide the area.
    The registry is empty: say so, and offer `/product-source` before going on.
-3. **Learnings and code.** `python3 .claude/kit/scripts/learnings.py <tags of the area>`, then
-   locate the code the task touches. A fact the code answers does not become a question.
+3. **Learnings, prior work and code.** `python3 .claude/kit/scripts/learnings.py <tags of the
+   area>` and `learnings.py --search <key words of the request>` (past tasks, kept decisions,
+   brain pages), then locate the code the task touches. A fact the code or the prior work
+   answers does not become a question; a similar past task is worth naming in the triage.
 
 ## 2. Triage: one short round
 
@@ -174,9 +176,14 @@ about those findings again.
 are decided:
 
 1. `Agent(retrospective, "work dir .work/<ID>")` writes `05-retro.md`: what went wrong and the
-   learnings it proposes, tagged.
+   learnings, decisions and brain updates it proposes, tagged.
 2. Show the dev the verdicts, the "Out of purpose" items, the rulings in `ledger.md`, and the
-   proposed learnings. Append to the learnings file only the ones the dev approves.
+   proposals. Ask with `AskUserQuestion` `multiSelect` which to keep, then append the approved
+   learnings to the learnings file, the approved decisions to the decisions file (`decisions` in
+   `flow.json`; mark one it replaces `Superseded by: <slug>`), and apply the approved brain
+   updates as `/brain add` would. Nothing the dev did not check is written.
+3. `python3 .claude/kit/scripts/learnings.py --index <ID>` adds the task to the tasks file
+   (purpose, criteria, PR), so a later task finds it after this one's work directory is deleted.
 
 **Done.** Before opening the PR or MR, run the project's check (the build and test commands
 `/flow-setup stack` recorded, the same the CI runs). If it fails, do not open it: show the
