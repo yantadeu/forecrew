@@ -34,6 +34,7 @@ commands, scripts and one hook that you install into a repository so the agents 
 | "Tests pass" | The tester reverts the fix and shows each test failing without it; the machine runs lint, build and tests before any reviewer |
 | One context checks its own work | Four reviewers in parallel, each with a clean context and its own lens: contract, security, QA, product (and the specialists you hire) |
 | Decisions you never saw | Every ruling taken without you is in a ledger, with its cost if wrong |
+| What a task learned is deleted with it | Learnings, kept decisions and one entry per task stay after cleanup, and the next task searches them first; an optional second brain (`/brain`) holds what the code does not say |
 | "Done" | Done means a pull or merge request exists, or you closed it yourself |
 | You babysit terminals | One page shows every task of every worktree; whatever needs you raises its hand, and you answer there, in the terminal, or from your phone |
 
@@ -166,6 +167,14 @@ Each group opens with a click. The short version is in the [tour](#a-tour-in-gif
   `done` once one is open or merged on GitHub or GitLab (with a link), git sees the branch
   merged, or you run `work.sh done` for work with no PR. Then the agent suggests `/clear` so
   the next task starts with a clean context.
+- **Test the agents themselves.** Behavior evals run each agent on a fixture under pressure
+  ("this is urgent, skip the edge cases") and check what it wrote.
+
+</details>
+
+<details>
+<summary><b>Remember across tasks</b></summary>
+
 - **Learn between tasks.** A retrospective agent reads the finished task and proposes tagged
   learnings. You approve what goes into `LEARNINGS.md`, and each reviewer loads only its tags.
 - **Keep what the task taught after it is deleted.** The retrospective also proposes which
@@ -181,8 +190,6 @@ Each group opens with a click. The short version is in the [tour](#a-tour-in-gif
   what a task had to discover. In the repository it is the team's; pointed at an absolute
   path it is your personal vault. The dashboard's Brain tab lists and searches all of it
   (pages, decisions, tasks, learnings), and `embeddings` in `flow.json` adds search by meaning.
-- **Test the agents themselves.** Behavior evals run each agent on a fixture under pressure
-  ("this is urgent, skip the edge cases") and check what it wrote.
 
 </details>
 
@@ -265,7 +272,8 @@ Each group opens with a click. The short version is in the [tour](#a-tour-in-gif
   goes first and why: a branch cut from another merges after it, two branches that change the
   same file merge in the order they started.
 - **Clean up a finished task, memory included.** For a done task, the next session (or the
-  "clean up" button on the dashboard) offers the retrospective first, so the learnings survive,
+  "clean up" button on the dashboard) offers the retrospective first, so the learnings, the kept
+  decisions and the task's entry in `TASKS.md` survive,
   then shows a plan of exactly what goes: the task's state, its worktree and local branch, and
   a review of Claude's auto memory about the task, where you pick which entries are deleted.
   Nothing goes before you confirm, a plan that changed meanwhile is refused, and a worktree with
@@ -325,7 +333,7 @@ flowchart TD
     FD -->|yes| PICK["You pick which get fixed<br/>findings-decision.md"]
     PICK -->|some checked| BACK
     PICK -->|rest accepted| RE
-    FD -->|no| RE["retrospective<br/>05-retro.md, learnings for your ok"]
+    FD -->|no| RE["retrospective<br/>05-retro.md: learnings, decisions,<br/>brain pages for your ok"]
     RE --> MR["ready-for-mr<br/>open the PR or MR"]
     MR --> DONE["done<br/>PR/MR open or merged, or work.sh done"]
     DONE --> CU["Clean up, after your ok<br/>state, worktree, auto memory"]
@@ -357,9 +365,10 @@ orchestrator routes on that line, not on prose.
 | Bounded fix loop | Agents looping on a finding they cannot resolve | At most three rounds, then the decision is yours |
 | Ledger of rulings | Decisions you never saw | Every decision taken without asking, with its cost if wrong |
 | Findings decision | Minor findings fixed (or dropped) without you; a finding nobody saw | Each finding fixed or accepted by you, with the date |
-| Retrospective | The same mistake in the next task | Proposed learnings you approve |
+| Retrospective | The same mistake in the next task | Proposed learnings, decisions to keep and brain pages, you approve each |
+| Prior work searched first | A task redoing what an earlier one did, or undoing what it decided | Past tasks, kept decisions and brain pages read before the contract; breaking a decision is a question for you |
 | Done only with a PR/MR | A task reported finished that nobody can review or merge | `done` means something exists to merge, or you closed it yourself |
-| Cleanup after your ok | Stale worktrees, branches and memory of finished work misleading the next task | Exactly the listed items removed, learnings kept, nothing unpushed lost |
+| Cleanup after your ok | Stale worktrees, branches and memory of finished work misleading the next task | Exactly the listed items removed, learnings, decisions and the task's entry kept, nothing unpushed lost |
 | Gates | A stage reporting "done" without its result, or starting too early | A missing section, an uncovered criterion or an open question stops the flow |
 
 The cost is more tokens and a few minutes per task. The None lane skips refiner and tester for
@@ -392,7 +401,8 @@ git clone https://github.com/yantadeu/forecrew.git
 The installer:
 
 - copies the kit to `.claude/kit/`;
-- creates the agents, commands, `flow.json`, `product-sources.md` and `LEARNINGS.md` only if
+- creates the agents, commands, `flow.json`, `product-sources.md`, `LEARNINGS.md`,
+  `DECISIONS.md` and `TASKS.md` only if
   they do not exist. When yours differs it keeps yours and tells you; with `--replace` it moves
   yours to `.agent-flow-backup/<time>/` first. The kit's originals stay in
   `.claude/kit/originals/` so you can compare and merge later;
@@ -564,9 +574,10 @@ next, or why it cannot start yet.
 - **Each step says what it handed over:** two lines of its file and the criteria it cites,
   screenshots of the proof as a gallery (click for the lightbox), and a toast when a stage
   lands while you watch.
-- **Three tabs beside the map:** *Task* (the steps, the task's tokens and cost, the rulings),
-  *Crew* (who works where, and the specialists you can hire) and *Costs* (every task compared,
-  and where the tokens go).
+- **Four tabs beside the map:** *Task* (the steps, the task's tokens and cost, the rulings),
+  *Crew* (who works where, and the specialists you can hire), *Costs* (every task compared,
+  and where the tokens go) and *Brain* (pages, kept decisions, finished tasks and learnings,
+  searched as you type; a note opens in place).
 - **The sidebar navigates:** one row per task with a status dot and one count, a filter (`/`),
   up/down/Enter, done tasks folded, the merge order (uncommitted work included) at the bottom;
   drag its edge to resize, or fold it to a rail of dots. Settings live in one gear menu.
@@ -585,7 +596,9 @@ page; the others answer in their terminals as usual.
 1. If a reviewer passed with findings, you decide each one on the dashboard ("Fix it" or
    "Accept as it is") or answer the session's question. A finding of a failed review inside the
    fix-round cap is the agents': the page says so and you only watch.
-2. The retrospective proposes learnings; you approve what goes into `LEARNINGS.md`.
+2. The retrospective proposes learnings, rulings to keep and, with a brain, pages; you check
+   which go into `LEARNINGS.md`, `DECISIONS.md` and `docs/brain/`. The task gets its entry in
+   `TASKS.md` (`learnings.py --index <ID>`), so the next task finds it after cleanup.
 3. The agent runs the project's check, then ships it (a failing check stops it): with
    `"ship"` on in `flow.json` it pushes the branch and opens the pull or merge request with your
    tool (`gh`, `glab` or a command of your own, see [Shipping a task](#shipping-a-task-optional));
@@ -700,7 +713,8 @@ Notes the setup repeats when it offers them:
 - superpowers and mattpocock-skills have their own spec and orchestration skills. Use their TDD,
   debugging and grilling skills inside this flow, not a second flow next to it.
 - claude-mem is personal and records session content locally. Team rules belong in
-  `LEARNINGS.md`, which is shared and reviewed.
+  `LEARNINGS.md`, decisions in `DECISIONS.md` and the domain in `docs/brain/`, which are shared
+  and reviewed. `/brain` pointed at an absolute path is a personal vault instead.
 - MCP servers also work in Cursor (`.cursor/mcp.json`) and Codex (`~/.codex/config.toml`).
   Claude Code plugins without an MCP server have no equivalent there.
 
@@ -805,8 +819,8 @@ python3 .claude/kit/evals/run.py --control             # same prompts, no agent 
 Each case in `.claude/kit/evals/cases/<name>/` has a fixture work directory, an optional small
 repository, a prompt and deterministic checks on the files the agent writes (gates passing,
 patterns that must or must not appear in a section, or in repository files such as brain
-pages). A case without an agent runs a slash command (`/brain add`). A run copies your `.claude/` into a scratch
-repository, so it evaluates your adapted agents. A case that also passes under `--control` does
+pages). A case without an agent runs a slash command (`/brain add`); `allowed_tools` grants what
+it needs past `acceptEdits`. A run copies your `.claude/` into a scratch repository, so it evaluates your adapted agents. A case that also passes under `--control` does
 not test the agent: rewrite it. Evals call the model, so they cost tokens and do not run in CI.
 
 To add a case after a real failure: copy the work directory of the task where an agent went
@@ -828,7 +842,9 @@ confirm it fails, then fix the agent's file until it passes.
   `Origin` and a JSON body, so another page in the browser cannot send one. A cleanup deletes
   only what the server's own recomputed plan lists, refuses to remove a worktree holding a
   git-ignored secret (`.env`, keys), and never touches the auto memory directory: it asks a
-  session to review it with you. Forge tokens stay in the server, go only to an allowed host,
+  session to review it with you. The Brain tab's notes get the event log's mask, a brain page
+  that is a link out of its folder is never read, and the page never runs the `embeddings`
+  command. `/brain add` never writes a secret or a person's contact into a page. Forge tokens stay in the server, go only to an allowed host,
   and are masked in any error it returns; a redirect is never followed with them. The page
   refuses to be framed by another site. A held request goes back to the terminal when the page
   closes or after 9.5 minutes. Permission dialogs are always answerable from the page while it
@@ -881,6 +897,10 @@ unreadable, and do not paste the dashboard link into a session. `/task` opens th
 - Costs are counted for Claude Code only, from the tasks run with this version of the kit
   on. The main session's share is an estimate: its replies inside the task's time window, so two
   tasks of one session at the same time share replies.
+- The brain search is a ranking over words (BM25) unless you configure `embeddings`; with a
+  remote embeddings API, your notes' text is sent to it. The page always searches by words.
+- Claude Code asks before every edit under `.claude/`, so approving decisions and learnings
+  asks once per file; brain pages live in `docs/brain/` for that reason.
 - The dashboard shows live agent activity only for Claude Code. For the other tools it shows
   stages from the files.
 
@@ -923,8 +943,11 @@ python3 template/.claude/kit/test_page.py
 Covers the gates, readiness, the fix-round cap, the event log masking, the review package, the
 exports, the eval graders, the dashboard, the attention alerts and web answers, the hook
 wiring, the closing statuses with the GitHub and GitLab lookups, the cleanup, the stage digests, the
-evidence endpoint, the cost per task, `work.sh fork` and the specialists' catalog. `test_page.py`
+evidence endpoint, the cost per task, `work.sh fork`, the specialists' catalog, the task index,
+the prior-work search (ranking, plurals, symlinks, the embeddings cache and fallback) and the
+Brain tab's data. `test_page.py`
 checks the dashboard page without a browser: both languages carry every label the server can
-return, no English text is left outside the dictionary, noise starts collapsed, and the
-cleanup posts only what the plan offered. Each check was confirmed to fail when the behavior it covers was
+return, no English text is left outside the dictionary, noise starts collapsed, the
+cleanup posts only what the plan offered, and the Brain tab escapes every note and reads only
+while on screen. Each check was confirmed to fail when the behavior it covers was
 removed.
