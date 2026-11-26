@@ -68,6 +68,9 @@ cd /path/to/your/repo && claude                  # then, inside the session:
 <td width="50%"><img src="assets/gifs/hire.gif" alt="The Crew panel's Hire a specialist cards: performance, accessibility, data migration and API compatibility reviewers, each with its command"><br><sub><b>Hire a specialist.</b> Ready reviewers (performance, accessibility, data migrations, API compatibility) join the crew with <code>/flow-agent add &lt;name&gt;</code>: a new lens in parallel, its own desk on the site.</sub></td>
 <td width="50%"><img src="assets/screenshots/now.jpg" alt="Waiting on you: the executor asks to run Bash, with Approve and Details, and the steps of the task under it"><br><sub><b>Needs you.</b> A question, a permission or the session's turn waits at the top, held for the page. You answer it there, in the terminal, or on Telegram.</sub></td>
 </tr>
+<tr>
+<td colspan="2" align="center"><img src="assets/gifs/brain.gif" width="50%" alt="The Brain tab: counts of pages, decisions, tasks and learnings; typing refund finds the Refunds page, the task that changed it and a related decision; typing cents opens the money-in-cents decision"><br><sub><b>What earlier tasks learned.</b> The Brain tab searches brain pages, kept decisions, finished tasks and learnings as you type, and each note opens in place. The refiner runs the same search before it writes a contract.</sub></td>
+</tr>
 </table>
 
 ## Where it runs
