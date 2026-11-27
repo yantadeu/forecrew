@@ -139,6 +139,13 @@ the findings and their state, and the dev decides each one from the page. `impor
 high and `minor` as low; `Severity: x` and `**Medium**` are read too, and a finding without a
 severity shows as `unknown`.
 
+Severity is what the defect gives, in production, that its trigger did not already have: data
+read or written across a boundary, money or state wrong, a step that cannot be undone. Trace the
+path before you grade it. A defect reachable only in a debug build, a test, a dev-only flag or a
+local script is `minor` at most, and says what would make it reachable; one that gives the caller
+nothing beyond what they can already do legitimately is `minor` too. `critical` is for what a
+merge would ship.
+
 A lens with nothing to review in this task writes `Verdict: PASS` and a `## Not applicable`
 section saying why; the dashboard shows it as "not applicable" (a FAIL with that section stays a
 FAIL), not as a plain approval. A fix round re-runs the contract reviewer and the lenses whose last

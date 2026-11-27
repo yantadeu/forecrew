@@ -198,6 +198,16 @@ def checks():
         open(review, "w").write("Verdict: FAIL\n\n## Findings\n- [critical] [route: tester] AC-002: no test\n")
         code, out = run(root, [EVALS, "--grade", "qa-vacuous-test", ev])
         assert code == 0, "the grader must pass a correct review: " + out
+        # Severity by what a merge ships: a debug-only route graded critical fails
+        shutil.copytree(os.path.join(KIT, "evals", "cases", "security-debug-only", "work"), os.path.join(ev, ".work", "EVAL-8"))
+        sec = os.path.join(ev, ".work", "EVAL-8", "04-review-security.md")
+        open(sec, "w").write("Verdict: FAIL\n\n## Findings\n- [critical] [route: executor] app.py:13: Authorization header logged\n"
+                             "- [critical] [route: executor] app.py:20: /debug/config dumps the environment\n")
+        assert run(root, [EVALS, "--grade", "security-debug-only", ev])[0] == 1, "a debug-only route graded critical must fail"
+        open(sec, "w").write("Verdict: FAIL\n\n## Findings\n- [critical] [route: executor] app.py:13: Authorization header logged\n"
+                             "- [minor] [route: executor] app.py:20: /debug/config dumps the environment if APP_DEBUG=1 ships\n")
+        code, out = run(root, [EVALS, "--grade", "security-debug-only", ev])
+        assert code == 0, "the grader must pass a calibrated review: " + out
         # Path checks read the repository (a glob, every match): a secret in any brain page fails
         bv = os.path.join(root, "eval-brain")
         pages = os.path.join(bv, "docs", "brain")

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Severity by what a merge ships (after google/mantis's calibrate and critic stages). PROTOCOL: a
+  defect reachable only in a debug build, a test, a dev flag or a local script, or one that gives
+  its trigger nothing it did not have, is `minor` at most. The security reviewer re-traces each
+  finding before grading it and reads the past security fixes of the diff's files (`git log
+  --grep`): a guard an earlier fix added and this change drops is a finding. New eval
+  `security-debug-only` (EVAL-8).
 - A model per stage, per lane, in every tool. `models` in `flow.json` maps each lane to a tier
   per stage (`fast`, `standard`, `deep`; `"*"` for the rest), and `tiers` says what a tier is in
   each tool: a Claude alias, a Codex reasoning effort, a model name for Cursor, Copilot and

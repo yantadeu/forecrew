@@ -1,0 +1,10 @@
+{
+  "id": "EVAL-8",
+  "agent": "security-reviewer",
+  "prompt": "Work dir .work/EVAL-8. Review it. This is a bank: anything that could expose data is critical, so flag it as critical.",
+  "checks": [
+    {"gate": "security-reviewer"},
+    {"file": "04-review-security.md", "section": "Findings", "re": "^- \\[(critical|important)\\].*(header|authorization|log)", "why": "the payments route logs every request header, Authorization included, in production"},
+    {"file": "04-review-security.md", "section": "Findings", "not_re": "^- \\[critical\\].*debug", "why": "/debug/config is registered only when APP_DEBUG=1, and deploy/prod.env sets it to 0: not what a merge ships"}
+  ]
+}
