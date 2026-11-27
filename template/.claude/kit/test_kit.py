@@ -56,9 +56,11 @@ def stop(root, agent_type, active=False, transcript="handed work dir .work/TASK-
 
 
 def launch(root, agent_type, prompt="work dir .work/TASK-1"):
-    """Output of the hook when the orchestrator launches a stage: a deny JSON, or empty."""
-    return run(root, [HOOK], {"hook_event_name": "PreToolUse", "tool_name": "Agent",
-                              "tool_input": {"subagent_type": agent_type, "prompt": prompt}})[1]
+    """Output of the hook when the orchestrator launches a stage: a deny JSON, or empty. The allow
+    that only sets the routed model (routing_quality_notify checks it) is left out."""
+    out = run(root, [HOOK], {"hook_event_name": "PreToolUse", "tool_name": "Agent",
+                             "tool_input": {"subagent_type": agent_type, "prompt": prompt}})[1]
+    return "".join(ln for ln in out.splitlines(True) if '"permissionDecision": "allow"' not in ln)
 
 
 def main():
@@ -400,8 +402,9 @@ def checks():
     stage_digest()
     evidence_and_costs()
     specialist_catalog()
+    routing_quality_notify()
     print("ok: gates, readiness, fix-round cap, event log, review package, exports, eval graders, dashboard, telegram, project checks,"
-          " learnings, merge order, attention alerts, web answers, hook wiring, closing and cleanup, one dashboard for every project")
+          " learnings, merge order, attention alerts, web answers, hook wiring, closing and cleanup, one dashboard for every project, model routing, quality, tidy, notifications, second opinion")
 
 
 def projects_server():
@@ -4019,6 +4022,178 @@ def specialist_catalog():
         assert got["perf-reviewer"] is True and got["a11y-reviewer"] is False, got
     finally:
         shutil.rmtree(base)
+
+
+def routing_quality_notify():
+    """The lane picks each stage's model on the Agent call; the cost view measures rework and keeps
+    it after cleanup; --tidy finds what to merge; desktop notifications fire only when opted in and
+    no page is open; the second opinion sends the package to the configured CLI and masks its answer."""
+    base = tempfile.mkdtemp()
+    try:
+        repo = new_repo(base)
+        w = os.path.join(repo, ".work", "T-1")
+        assert run(repo, [WORK_SH, "init", "T-1", "t"])[0] == 0
+        purpose = lambda extra="", lane="Light": open(os.path.join(w, "00-purpose.md"), "w").write(
+            PURPOSE.format(lane=lane).replace("\n\n## Acceptance", extra + "\n\n## Acceptance"))
+        def routed(agent, model=None):
+            out = run(repo, [HOOK], {"hook_event_name": "PreToolUse", "tool_name": "Agent", "tool_input": {
+                "subagent_type": agent, "prompt": "work dir .work/T-1", **({"model": model} if model else {})}})[1]
+            line = next((ln for ln in out.splitlines() if ln.startswith("{")), None)
+            return json.loads(line)["hookSpecificOutput"].get("updatedInput", {}).get("model") if line else None
+
+        purpose()
+        assert routed("refiner") == "opus", "light lane: the refiner stays on opus"
+        purpose(lane="None")
+        assert routed("reviewer") == "sonnet" and routed("security-reviewer") == "opus", "lane None: '*' and the named stage"
+        assert routed("reviewer", model="sonnet") is None, "a call already on the routed model is left alone"
+        purpose(extra="\nModel: haiku", lane="None")
+        assert routed("security-reviewer") == "haiku", "the task's Model: line wins over the lane"
+        purpose(extra="\nModel: gpt-9", lane="None")
+        assert routed("reviewer") is None, "an unknown model is never sent to the Agent tool"
+        purpose(lane="Light")
+        out = run(repo, [HOOK], {"hook_event_name": "PreToolUse", "tool_name": "Agent",
+                                 "tool_input": {"subagent_type": "executor", "prompt": "work dir .work/T-1"}})[1]
+        assert '"deny"' in out and "updatedInput" not in out, "a refused stage is refused, not rerouted"
+        assert "refiner deep (opus)" in run(repo, [WORK_SH, "status"])[1], "status shows the tier and the Claude model"
+        purpose(extra="\nModel: fast", lane="Full")
+        assert routed("refiner") == "haiku", "a tier on the Model: line maps through tiers.claude"
+        purpose(lane="Full")
+        assert routed("refiner") == "opus", "Full: every stage deep"
+
+        # Other tools: tiers say what each tier is there; status gives the next stage's command.
+        flow = json.load(open(os.path.join(repo, ".claude", "flow.json")))
+        status_of = lambda: run(repo, [WORK_SH, "status"])[1]
+        assert "codex:" not in status_of() and "cursor:" not in status_of(), "no other tool installed: no hints"
+        open(os.path.join(repo, "AGENTS.md"), "w").write("<!-- agent-flow-kit:begin -->\n<!-- agent-flow-kit:end -->\n")
+        assert 'codex: codex -c model_reasoning_effort=high "Act as .claude/agents/refiner.md. Work dir .work/T-1."' in status_of()
+        os.makedirs(os.path.join(repo, ".cursor", "rules"))
+        open(os.path.join(repo, ".cursor", "rules", "task.mdc"), "w").write("x")
+        assert "cursor:" not in status_of(), "cursor without tiers.cursor: nothing to name"
+        flow["tiers"]["cursor"] = {"deep": "big-model-1"}
+        flow["tiers"]["gemini"] = {"deep": "gem-pro; rm -rf /"}
+        flow["tiers"]["claude"]["deep"] = "sonnet"
+        open(os.path.join(repo, ".claude", "flow.json"), "w").write(json.dumps(flow))
+        out = status_of()
+        assert "cursor: a new chat on big-model-1, with @agent-refiner" in out and "gemini" not in out, \
+            "a value that is not a plain model name is never printed into a command"
+        assert routed("refiner") == "sonnet", "tiers.claude decides what deep is in Claude Code"
+        flow["tiers"]["gemini"] = {"deep": "gem-pro"}
+        open(os.path.join(repo, ".claude", "flow.json"), "w").write(json.dumps(flow))
+        assert 'gemini: gemini -m gem-pro -i "Act as .claude/agents/refiner.md' in status_of()
+        purpose(lane="Light")
+        assert "model_reasoning_effort=high" in status_of(), "light refiner is deep"
+        shutil.rmtree(os.path.join(repo, ".cursor"))
+        os.remove(os.path.join(repo, "AGENTS.md"))
+        flow = json.load(open(FLOW))
+        open(os.path.join(repo, ".claude", "flow.json"), "w").write(json.dumps(flow))
+
+        # Quality: rounds, stages sent back, fixes, delivery; kept in the tasks file after cleanup.
+        d = load_dashboard("dash_quality")
+        purpose(lane="Light")
+        evs = [{"ev": "start", "type": "executor", "t": 1}, {"ev": "start", "type": "executor", "t": 2},
+               {"ev": "blocked", "type": "tester", "t": 3}, {"ev": "refused", "type": "reviewer", "t": 4},
+               {"ev": "stop", "type": "executor", "agent": "a1", "t": 5,
+                "usage": {"claude-sonnet-5-5": [1000, 100, 0, 0, 1], "claude-opus-5-5": [10, 1, 0, 0, 1]}}]
+        with open(os.path.join(repo, ".work", "events.jsonl"), "a") as f:
+            for e in evs:
+                f.write(json.dumps({**e, "work": "T-1"}) + "\n")
+        open(os.path.join(w, "findings-decision.md"), "w").write(
+            "Decided: 2026-11-26\n- fixed high qa [0123456789ab]: x\n- fix low qa [0123456789ac]: y\n- accepted low qa [0123456789ad]: z\n")
+        q = d.task_quality(w, d.events(os.path.join(repo, ".work"))["T-1"])
+        assert q == {"lane": "light", "models": ["opus", "sonnet"], "executor": "sonnet", "rounds": 1, "sent_back": 1, "refused": 2,  # the executor launch refused above, and this one
+                     "fixes": 2, "delivered": False}, q
+        open(os.path.join(w, "closed"), "w").close()
+        assert d.task_quality(w, [])["delivered"], "work.sh done delivers the task"
+        assert run(repo, [LEARN, "--index", "T-1"])[0] == 0
+        tasks = open(os.path.join(repo, ".claude", "TASKS.md")).read()
+        assert '- **Quality**: {"lane": "light"' in tasks and '"cost": ' in tasks, tasks
+        shutil.rmtree(w)
+        kept = [x for x in d.project_usage(repo) if x["id"] == "T-1"]
+        assert kept and kept[0].get("indexed") and kept[0]["quality"]["rounds"] == 1 and kept[0]["cost"] > 0, kept
+        open(os.path.join(repo, ".claude", "TASKS.md"), "a").write('\n## T-2: bad\n- **Quality**: {"rounds": -3, "lane": 7}\n')
+        bad = [x for x in d.indexed_tasks(repo) if x["id"] == "T-2"][0]["quality"]
+        assert bad["rounds"] == 0 and bad["lane"] == "7", "a hand-edited Quality line cannot break the page"
+
+        # --tidy: near duplicates, superseded decisions, untagged entries; nothing written.
+        learn = os.path.join(repo, ".claude", "LEARNINGS.md")
+        open(learn, "w").write("# L\n## a\n- **Tags**: data\n- **What**: Excel breaks accents in CSV exports without a UTF-8 BOM.\n"
+                               "## b\n- **Tags**: data\n- **What**: CSV exports break accents in Excel without a UTF-8 BOM.\n"
+                               "## c\n- **What**: the payment API rate limits at ten requests a second.\n")
+        open(os.path.join(repo, ".claude", "DECISIONS.md"), "w").write(
+            "# D\n## old\n- **Tags**: security\n- **Decision**: cookies.\n- **From**: T, 2026. Superseded by: new\n")
+        before = open(learn).read()
+        out = run(repo, [LEARN, "--tidy"])[1]
+        assert "merge   .claude/LEARNINGS.md: a + b" in out and "tag     .claude/LEARNINGS.md: c" in out \
+            and "drop    .claude/DECISIONS.md: old (superseded by new" in out and "a + c" not in out, out
+        assert open(learn).read() == before, "--tidy only reports"
+        open(learn, "w").write("# L\n")
+        open(os.path.join(repo, ".claude", "DECISIONS.md"), "w").write("# D\n")
+        assert run(repo, [LEARN, "--tidy"])[1].strip() == "nothing to tidy"
+
+        # Desktop notifications: opt-in, quiet while a page is open, never the alert's detail.
+        fake = os.path.join(base, "bin")
+        os.makedirs(fake)
+        got = os.path.join(base, "notified")
+        for exe in ("osascript", "notify-send"):
+            open(os.path.join(fake, exe), "w").write(f'#!/bin/sh\nprintf "%s|" "$@" >> {got}\n')
+            os.chmod(os.path.join(fake, exe), 0o755)
+        env_path = fake + os.pathsep + os.environ["PATH"]
+
+        def turn():
+            p = subprocess.run([sys.executable, HOOK], input=json.dumps({
+                "hook_event_name": "Stop", "session_id": "s1", "last_assistant_message": "TOKEN=hunter2 done"}),
+                capture_output=True, text=True, cwd=repo, env=dict(os.environ, CLAUDE_PROJECT_DIR=repo, PATH=env_path))
+            assert p.returncode == 0, p.stderr
+            for _ in range(40):
+                if os.path.exists(got):
+                    break
+                time.sleep(0.05)
+            text = open(got).read() if os.path.exists(got) else ""
+            if os.path.exists(got):
+                os.remove(got)
+            return text
+
+        assert turn() == "", "off by default"
+        env = dict(os.environ, CLAUDE_PROJECT_DIR=repo, PATH=env_path)
+        assert "on" in subprocess.run(["bash", WORK_SH, "notify", "on"], capture_output=True, text=True, cwd=repo, env=env).stdout
+        text = turn()
+        assert "Forecrew · repo" in text and "the session finished its turn" in text and "hunter2" not in text, text
+        page = os.path.join(repo, ".work", "attention", ".page")
+        open(page, "w").close()
+        assert turn() == "", "a page in view already shows the alert"
+        os.utime(page, (time.time() - 60, time.time() - 60))
+        assert turn() != "", "a page gone quiet notifies again"
+        subprocess.run(["bash", WORK_SH, "notify", "off"], capture_output=True, cwd=repo, env=env)
+        assert turn() == ""
+
+        # Second opinion: the package goes to the configured command; its answer is kept, masked.
+        os.makedirs(w)
+        open(os.path.join(repo, ".work", "current"), "w").write("T-1")
+        purpose()
+        so = lambda: run(repo, [WORK_SH, "second-opinion"])
+        flow = json.load(open(os.path.join(repo, ".claude", "flow.json")))
+        flow["second_opinion"] = {"command": f"cat > {base}/sent; echo '- [minor] a.py:1: x'; echo 'API_KEY=abc123'"}
+        open(os.path.join(repo, ".claude", "flow.json"), "w").write(json.dumps(flow))
+        code, out = so()
+        assert code == 2 and "review-package" in out, "no package, nothing sent"
+        open(os.path.join(w, "review.diff"), "w").write("+def a(): return 1\n")
+        code, out = so()
+        sent, answer = open(os.path.join(base, "sent")).read(), open(os.path.join(w, "second-opinion.md")).read()
+        assert code == 0 and "+def a(): return 1" in sent and "# Purpose" in sent and "do not change any file" in sent, sent
+        assert "- [minor] a.py:1: x" in answer and "abc123" not in answer and "Exit: 0" in answer, answer
+        flow["second_opinion"] = {"command": "echo broken >&2; exit 3"}
+        open(os.path.join(repo, ".claude", "flow.json"), "w").write(json.dumps(flow))
+        code, _ = so()
+        assert code == 1 and "Exit: 3" in open(os.path.join(w, "second-opinion.md")).read()
+        del flow["second_opinion"]
+        open(os.path.join(repo, ".claude", "flow.json"), "w").write(json.dumps(flow))
+        bare = os.path.dirname(sys.executable) + os.pathsep + "/usr/bin:/bin"
+        if not any(shutil.which(x, path=bare) for x in ("codex", "gemini")):
+            p = subprocess.run(["bash", WORK_SH, "second-opinion"], capture_output=True, text=True, cwd=repo,
+                               env=dict(os.environ, CLAUDE_PROJECT_DIR=repo, PATH=bare))
+            assert p.returncode == 2 and "no second-opinion CLI" in p.stderr, p.stderr
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
 
 
 if __name__ == "__main__":

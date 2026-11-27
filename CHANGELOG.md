@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- A model per stage, per lane, in every tool. `models` in `flow.json` maps each lane to a tier
+  per stage (`fast`, `standard`, `deep`; `"*"` for the rest), and `tiers` says what a tier is in
+  each tool: a Claude alias, a Codex reasoning effort, a model name for Cursor, Copilot and
+  Gemini. In Claude Code the hook sets the model on the Agent call of every stage it lets start;
+  elsewhere `work.sh status` prints, under the next stage, the `codex` or `gemini` command or the
+  model to pick. New installs: Full deep; Light standard except the refiner and the security
+  reviewer; None standard except the security reviewer. A `Model:` line in `00-purpose.md` (tier
+  or Claude alias) wins for the task. Without `models`, each agent keeps its own.
+- Quality next to cost. `GET /api/usage` carries each task's lane, models, executor model, fix
+  rounds, stages sent back, refused launches, findings fixed and delivery; the Costs tab groups
+  them by lane and executor model with cost per delivered task, and marks groups under three
+  tasks. `learnings.py --index` writes the numbers into the task's `TASKS.md` entry
+  (`- **Quality**: {...}`), so cleaned-up tasks still count.
+- `second-opinion-reviewer` in the specialists' catalog: `work.sh second-opinion` sends the
+  purpose, the contract and `review.diff` to Codex (`codex exec --sandbox read-only -`), Gemini or
+  `second_opinion.command`, writes the masked answer to `second-opinion.md`, and the lens keeps
+  only the findings it confirms in the code.
+- Desktop notifications: `work.sh notify on|off|test`, per user. When a session waits on you and
+  no dashboard or Telegram bridge is open, `osascript` (macOS) or `notify-send` (Linux) shows the
+  project, the task and the kind of wait, never its text.
+- `learnings.py --tidy`: near-duplicate learnings and decisions, superseded decisions and
+  untagged entries. The retrospective proposes them under `## Proposed tidy`; the dev approves.
+
 - Memory that outlives the task. The retrospective proposes which ledger rulings to keep;
   the approved ones go to `.claude/DECISIONS.md`. Every finished task gets an entry in
   `.claude/TASKS.md` (`learnings.py --index <ID>`: purpose, criteria, rulings, PR).

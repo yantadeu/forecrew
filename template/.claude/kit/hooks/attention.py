@@ -148,12 +148,50 @@ def pid_alive(pid):
     return True
 
 
+# Desktop notifications (`work.sh notify on`): per user, a flag in $FORECREW_HOME. Only while no
+# page is open (the dashboard, or the Telegram bridge, which counts as one): the dev looking at
+# the page or the phone already sees the alert. The text names the project, the task and the kind,
+# never the command or the question, which can carry what a screen share should not show.
+NOTIFY_FLAG = "notify-on"
+NOTIFY_TEXT = {"question": "a question waits for you", "permission": "a permission waits for you",
+               "turn": "the session finished its turn"}
+
+
+def notify_on():
+    return os.path.isfile(os.path.join(F.forecrew_home(), NOTIFY_FLAG))
+
+
+def notify(flow, kind):
+    if not notify_on() or page_age(attention_dir(flow)) < PAGE_FRESH:
+        return
+    try:
+        task = F.current_id(flow)
+    except ValueError:
+        task = None
+    title = "Forecrew · " + os.path.basename(os.path.realpath(F.ROOT))
+    body = (f"{task}: " if task else "") + NOTIFY_TEXT.get(kind, kind)
+    if sys.platform == "darwin" and shutil.which("osascript"):
+        # The text goes in as arguments, never into the script: nothing in it is run.
+        cmd = ["osascript", "-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)",
+               "-e", "end run", title, body]
+    elif shutil.which("notify-send"):
+        cmd = ["notify-send", "--app-name=Forecrew", title, body]
+    else:
+        return
+    try:
+        subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+    except OSError:
+        pass
+
+
 def raise_alert(flow, event, kind, detail, **extra):
     path = F.alert_path(flow, event.get("session_id"), event.get("agent_id") or "main")
     if not path:
         return None
     alert = {"kind": kind, "since": time.time(), "detail": short(detail, TURN_MAX if kind == "turn" else DETAIL_MAX), "claude_pid": claude_pid(), **extra}
     write_json(path, alert)
+    notify(flow, kind)
     return path, alert
 
 
@@ -477,6 +515,8 @@ def hold_alert(flow, event, kind, detail, still_on, extra=None, holdable=True, l
     alert = {"kind": kind, "since": time.time(), "detail": short(detail, TURN_MAX if kind == "turn" else DETAIL_MAX), "claude_pid": pid,
              "qid": secrets.token_urlsafe(16), "held": held, "heartbeat": time.time(), **fields}
     write_json(path, alert)
+    if not held:
+        notify(flow, kind)
     picked = wait_page(path, alert, adir, pid, still_on, extra, let_go, hold) if held else None
     if picked is None and os.path.exists(path):
         alert["held"] = False

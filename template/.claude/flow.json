@@ -6,6 +6,18 @@
   "brain": "docs/brain",
   "product_sources": ".claude/product-sources.md",
   "max_fix_rounds": 3,
+  "models": {
+    "full": {"*": "deep"},
+    "light": {"*": "standard", "refiner": "deep", "security-reviewer": "deep"},
+    "none": {"*": "standard", "security-reviewer": "deep"}
+  },
+  "tiers": {
+    "claude": {"fast": "haiku", "standard": "sonnet", "deep": "opus"},
+    "codex": {"fast": "low", "standard": "medium", "deep": "high"},
+    "cursor": {},
+    "copilot": {},
+    "gemini": {}
+  },
   "checks": [],
   "ship": {"enabled": false, "tool": "auto", "push": true, "draft": true, "command": ""},
   "language": "en",

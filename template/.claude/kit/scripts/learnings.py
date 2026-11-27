@@ -8,7 +8,10 @@ Usage: learnings.py --lens <lens>      entries with the tags of a lens in flow.j
        learnings.py --search <text>    prior work, best first: learnings, decisions, finished tasks and
                                        brain pages (BM25 on the words; by meaning with "embeddings")
        learnings.py --index <ID>       appends the task to the tasks file, from its 00-purpose.md
-                                       (once; a second run changes nothing)
+                                       and its events: lane, models, fix rounds, cost (once; a second
+                                       run changes nothing)
+       learnings.py --tidy             what to merge or drop once the files grow: near-duplicate
+                                       learnings and decisions, superseded decisions, untagged entries
 Paths come from .claude/flow.json ("learnings", "decisions", "tasks", "brain", "work_dir").
 
 "embeddings" in flow.json turns on search by meaning: {"command": "...", "min_similarity": 0.3}.
@@ -195,10 +198,55 @@ def search(root, flow, query, limit=LIMIT, semantic=True):
     return mode, [{**n, "score": round(s, 4)} for s, n in scored[:limit]]
 
 
+# Two entries this alike (shared words over all words, tags and field names left out) say the
+# same thing twice: one merged entry loads faster and cannot contradict the other.
+TIDY_SIMILAR = 0.5
+FIELD_RX = re.compile(r"^- \*\*(?:Tags|What|How we knew|Apply|Decision|Why|Cost if wrong|From)\*\*:", re.M)
+
+
+def tidy(root, flow):
+    """Lines of what to merge or drop, for the retrospective to propose and the dev to approve.
+    Nothing is changed here."""
+    out = []
+    for kind in ("learnings", "decisions"):
+        path = path_of(root, flow, kind)
+        rel = os.path.relpath(path, root)
+        items = [(b.splitlines()[0][3:].strip(), b, tags) for b, tags in entries(path)]
+        sets = [set(words(FIELD_RX.sub("", re.sub(r"(?m)^- \*\*Tags\*\*:.*$", "", b)))) for _, b, _ in items]
+        for i in range(len(items)):
+            for j in range(i + 1, len(items)):
+                union = sets[i] | sets[j]
+                share = len(sets[i] & sets[j]) / len(union) if union else 0
+                if share >= TIDY_SIMILAR:
+                    out.append(f"merge   {rel}: {items[i][0]} + {items[j][0]} ({round(100 * share)}% of the words shared)")
+        for slug, block, tags in items:
+            m = re.search(r"Superseded by:\s*([A-Za-z0-9._-]+)", block)
+            if kind == "decisions" and m:
+                out.append(f"drop    {rel}: {slug} (superseded by {m.group(1)}; git keeps it)")
+            if not tags:
+                out.append(f"tag     {rel}: {slug} (no Tags line: no lens loads it)")
+    return out
+
+
 def section(text, name):
     m = re.search(rf"(?ms)^## {re.escape(name)}\s*\n(.*?)(?=^## |\Z)", text)
     body = re.sub(r"<!--.*?-->", "", m.group(1), flags=re.S) if m else ""
     return [ln.rstrip() for ln in body.splitlines() if ln.strip()]
+
+
+def quality(root, flow, tdir, tid):
+    """The task's quality and cost as the dashboard measures them, kept in its entry so the cost
+    view still compares it after the work directory is deleted. None when it cannot be read."""
+    try:
+        import dashboard
+        evs = dashboard.events(os.path.dirname(tdir)).get(tid, [])
+        q = dashboard.task_quality(tdir, evs)
+        q.pop("delivered", None)  # indexed means closed
+        q["cost"] = dashboard.task_usage(root, evs, flow)["cost"]
+        return q
+    except Exception as e:  # the entry without its numbers is still worth writing
+        print(f"quality not recorded ({type(e).__name__}: {e})", file=sys.stderr)
+        return None
 
 
 def index(root, flow, tid):
@@ -233,6 +281,9 @@ def index(root, flow, tid):
     lines.append(f"- **Rulings**: {rulings}" + (" (the approved ones are in the decisions file)" if rulings else ""))
     if pr:
         lines.append(f"- **PR**: {pr}")
+    q = quality(root, flow, tdir, tid)
+    if q:
+        lines.append("- **Quality**: " + json.dumps(q, ensure_ascii=False))
     if not os.path.isfile(out):
         os.makedirs(os.path.dirname(out), exist_ok=True)
         open(out, "w").write("# Tasks\n\nOne entry per finished task, appended by `learnings.py --index <ID>`.\n")
@@ -256,6 +307,10 @@ def main(args):
             print(f"<!-- {n['source']} ({n['kind']}, {mode} {n['score']}) -->\n{n['text']}")
         if not found:
             print(f"nothing on: {' '.join(args[1:])}", file=sys.stderr)
+        return 0
+    if args == ["--tidy"]:
+        found = tidy(root, flow)
+        print("\n".join(found) if found else "nothing to tidy")
         return 0
     if args[0] == "--index":
         if len(args) != 2:

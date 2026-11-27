@@ -8,6 +8,8 @@ the current work directory:
   - launching a stage (the Agent tool) before the stages it requires pass, while the contract
     has open [NEEDS CLARIFICATION] markers, or past max_fix_rounds of the executor; a reviewer
     also waits for the project's checks (scripts/checks.py) to pass on the current tree.
+A stage that may launch gets the model its lane routes it to ("models" in flow.json, or the
+task's `Model:` line), set on the Agent call itself (stage_model).
 Any other tool call is never blocked. Logging and the gates run only while a work is current;
 the attention alerts (attention.py: which session waits on the dev, and why) run for every
 session, because the session that waits on the dev is often the one still in the triage. For
@@ -467,6 +469,95 @@ def ready(flow, wid, target):
     return None
 
 
+# A stage runs on a tier, not a vendor's model: "models" in flow.json maps each lane to
+# {stage: fast|standard|deep, "*": ...}, and "tiers" says what each tier is in each tool. Claude Code
+# gets it on the Agent call (the hook); the other tools get it from `work.sh status`, which names
+# the model or prints the command for the next stage. A Claude alias (haiku, sonnet, opus, fable)
+# is still read, as the tier it stands for.
+TIERS = ("fast", "standard", "deep")
+MODELS = ("haiku", "sonnet", "opus", "fable")  # what the Agent tool takes as "model"
+ALIAS_TIER = {"haiku": "fast", "sonnet": "standard", "opus": "deep", "fable": "deep"}
+DEFAULT_TIERS = {"claude": {"fast": "haiku", "standard": "sonnet", "deep": "opus"},
+                 # Codex: the reasoning effort, which does not change name with each new model.
+                 "codex": {"fast": "low", "standard": "medium", "deep": "high"}}
+OTHER_TOOLS = ("codex", "cursor", "copilot", "gemini")
+
+
+def stage_tier(flow, wid, target):
+    """(what the task or the lane asks for this stage, as written: a tier or a Claude alias), or
+    None. A `Model: <tier|alias>` line in 00-purpose.md (the dev's call for this task) wins."""
+    text, _, lane = purpose(flow, wid)
+    forced = re.search(r"^Model:\s*(\S+)", text or "", re.M | re.I)
+    table = (flow.get("models") or {}).get(lane) if isinstance(flow.get("models"), dict) else None
+    table = table if isinstance(table, dict) else {}
+    pick = forced.group(1) if forced else table.get(target) or table.get("*")
+    if not pick:
+        return None
+    pick = str(pick).lower()
+    if pick not in TIERS and pick not in MODELS:
+        print(f"forecrew: model {pick!r} for {target} is not a tier ({', '.join(TIERS)}) nor one of "
+              f"{', '.join(MODELS)}; using the agent's own.", file=sys.stderr)
+        return None
+    return pick
+
+
+def tier_in(flow, pick, tool):
+    """What `pick` is in `tool`: a model alias for claude, an effort for codex, a model name for
+    the others; None when the tool has no value for that tier."""
+    if pick is None:
+        return None
+    if tool == "claude" and pick in MODELS:
+        return pick
+    tier = pick if pick in TIERS else ALIAS_TIER.get(pick)
+    table = (flow.get("tiers") or {}).get(tool) if isinstance(flow.get("tiers"), dict) else None
+    value = (table if isinstance(table, dict) else {}).get(tier) or DEFAULT_TIERS.get(tool, {}).get(tier)
+    if not value or not re.fullmatch(r"[A-Za-z0-9._:/-]{1,80}", str(value)):
+        return None
+    if tool == "claude" and value not in MODELS:
+        print(f"forecrew: tiers.claude.{tier} = {value!r} is not one of {', '.join(MODELS)}; using the agent's own.", file=sys.stderr)
+        return None
+    return str(value)
+
+
+def stage_model(flow, wid, target):
+    """The model alias a stage runs on in Claude Code, or None for its frontmatter's."""
+    return tier_in(flow, stage_tier(flow, wid, target), "claude")
+
+
+def found_tools(flow):
+    """The other tools this repository was exported for (export.py), plus gemini once its tiers are
+    set: the ones `work.sh status` gives the next stage's model to."""
+    found = set()
+    if os.path.exists(os.path.join(ROOT, ".cursor", "rules", "task.mdc")):
+        found.add("cursor")
+    if "agent-flow-kit:begin" in (read(os.path.join(ROOT, "AGENTS.md")) or ""):
+        found.add("codex")
+    if os.path.exists(os.path.join(ROOT, ".github", "prompts", "task.prompt.md")):
+        found.add("copilot")
+    tiers = flow.get("tiers") if isinstance(flow.get("tiers"), dict) else {}
+    if tiers.get("gemini"):
+        found.add("gemini")
+    return [t for t in OTHER_TOOLS if t in found]
+
+
+def next_hints(flow, wid, target):
+    """For the next stage, one line per other tool: how to run it on its tier there."""
+    pick = stage_tier(flow, wid, target)
+    if pick is None:
+        return []
+    ask = f"Act as .claude/agents/{target}.md. Work dir {os.path.basename(work_dir(flow))}/{wid}."
+    out = []
+    for tool in found_tools(flow):
+        v = tier_in(flow, pick, tool)
+        if not v:
+            continue
+        out.append({"codex": f'codex: codex -c model_reasoning_effort={v} "{ask}"',
+                    "gemini": f'gemini: gemini -m {v} -i "{ask}"',
+                    "cursor": f"cursor: a new chat on {v}, with @agent-{target} and the work dir",
+                    "copilot": f"copilot: a new chat on {v}, with the {target} agent and the work dir"}[tool])
+    return out
+
+
 def events(flow):
     text = read(os.path.join(work_dir(flow), "events.jsonl")) or ""
     out = []
@@ -480,6 +571,11 @@ def events(flow):
 
 def status(flow, wid):
     bad, shown_next = False, False
+    routed = [f"{a} {t}" + (f" ({m})" if (m := stage_model(flow, wid, a)) else "")
+              for a in flow["stages"] if (t := stage_tier(flow, wid, a))]
+    if routed:
+        rest = " (the rest: their agent file)" if len(routed) < len(flow["stages"]) else ""
+        print(f"  models   {', '.join(routed)}{rest}")
     if flow.get("checks"):
         why = checks_gate(flow, wid)
         print(f"  {'ok' if not why else 'pending':7}  {'checks':18} checks.md")
@@ -493,6 +589,11 @@ def status(flow, wid):
                 why = ready(flow, wid, agent)
                 line += f"   <- next{': blocked, ' + why if why else ''}"
                 shown_next = True
+                hints = [] if why else next_hints(flow, wid, agent)
+                print(line)
+                for h in hints:
+                    print(f"           {h}")
+                continue
             print(line)
             continue
         reason = gate(flow, wid, agent)
@@ -578,16 +679,23 @@ def main():
         # transcript, found by id under the Claude config, never by a path written here.
         if agent == "main" and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", str(event.get("session_id") or "")):
             entry["session"] = event["session_id"]
-        log(flow, wid, entry)
         inp = event.get("tool_input") or {}
         target = inp.get("subagent_type")
         marker = os.path.basename(work_dir(flow)) + "/" + wid
-        if event.get("tool_name") in ("Agent", "Task") and target in flow["stages"] and marker in str(inp.get("prompt", "")):
-            why = ready(flow, wid, target)
-            if why:
-                log(flow, wid, {"ev": "refused", "agent": agent, "type": target, "detail": why})
-                print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                                  "permissionDecision": "deny", "permissionDecisionReason": f"forecrew: {why}"}}))
+        stage_call = event.get("tool_name") in ("Agent", "Task") and target in flow["stages"] and marker in str(inp.get("prompt", ""))
+        why = ready(flow, wid, target) if stage_call else None
+        model = stage_model(flow, wid, target) if stage_call and not why else None
+        if model:
+            entry["model"] = model
+        log(flow, wid, entry)
+        if why:
+            log(flow, wid, {"ev": "refused", "agent": agent, "type": target, "detail": why})
+            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
+                              "permissionDecision": "deny", "permissionDecisionReason": f"forecrew: {why}"}}))
+        elif model and inp.get("model") != model:
+            # The documented way to change a tool's input: the routed model, whatever the call said.
+            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow",
+                              "updatedInput": {**inp, "model": model}}}))
     elif name == "SubagentStop":
         reason = gate(flow, wid, agent_type) if in_this_work(event, flow, wid) else None
         if reason and not event.get("stop_hook_active"):

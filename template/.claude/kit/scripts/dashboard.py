@@ -13,7 +13,9 @@ directory of each worktree from `git worktree list` and serves:
   GET  /api/attention                sessions waiting on the dev, per worktree (hooks/attention.py)
   GET  /api/worktrees                every worktree, with or without a task: its path, its switches
                                      and whether a Claude session is alive there (the page's chat)
-  GET  /api/usage                    every task's tokens and API-equivalent cost, per agent type
+  GET  /api/usage                    every task's tokens and API-equivalent cost, per agent type, and
+                                     its quality (lane, models, fix rounds, stages sent back); tasks
+                                     already cleaned up come from the tasks file
   GET  /api/evidence?wt=<n>&id=<ID>&f=<name>   one screenshot of <ID>/evidence/ (png, jpg, gif, webp)
   GET  /api/specialists              the catalog of specialists /flow-agent add installs
   GET  /api/brain?q=<text>           the brain: learnings, kept decisions, finished tasks and brain
@@ -1566,8 +1568,71 @@ def task_usage(wt, evs, flow, home_dir=None):
             "unpriced": sorted({m for r in rows for m in r["unpriced"]})}
 
 
+# ---- what a task's quality was: did a cheaper model cost rounds? ----
+FAMILY_RX = re.compile(r"claude-([a-z]+)")
+
+
+def task_quality(tdir, evs):
+    """What the task cost in rework, from its events and files: the lane, the model families its
+    subagents ran on, the executor's fix rounds, the stages the gate sent back, the launches it
+    refused, the findings decided "fix", and whether it was delivered (a PR/MR or `work.sh done`)."""
+    lane = re.search(r"^Lane:\s*(\w+)", read(os.path.join(tdir, "00-purpose.md"), 4000) or "", re.M | re.I)
+    models, coder = set(), {}
+    for e in evs:
+        if e.get("ev") != "stop" or not isinstance(e.get("usage"), dict):
+            continue
+        for k, t in e["usage"].items():
+            m = FAMILY_RX.match(k) if isinstance(k, str) else None
+            if m:
+                models.add(m.group(1))
+                if e.get("type") == "executor" and isinstance(t, list) and t and isinstance(t[0], int):
+                    coder[m.group(1)] = coder.get(m.group(1), 0) + sum(x for x in t[:4] if isinstance(x, int))
+    decision = read(os.path.join(tdir, "findings-decision.md"), 64_000) or ""
+    return {"lane": lane.group(1).lower() if lane else "",
+            "models": sorted(models),
+            # The executor writes the code the fix rounds redo: its model is the one to compare.
+            "executor": max(coder, key=coder.get) if coder else "",
+            "rounds": max(0, sum(1 for e in evs if e.get("ev") == "start" and e.get("type") == "executor") - 1),
+            "sent_back": sum(1 for e in evs if e.get("ev") == "blocked"),
+            "refused": sum(1 for e in evs if e.get("ev") == "refused"),
+            "fixes": len(re.findall(r"^-\s+fix(?:ed)?\s", decision, re.M | re.I)),
+            "delivered": any(os.path.isfile(os.path.join(tdir, n)) for n in ("closed", "mr.json"))}
+
+
+QUALITY_LINE = re.compile(r"^- \*\*Quality\*\*:\s*(.+)$", re.M)
+
+
+def indexed_tasks(root):
+    """The tasks of the tasks file that carry a Quality line (learnings.py --index writes it): the
+    history of tasks whose work directory was cleaned up."""
+    flow = flow_of(root)
+    out = []
+    for block, _tags in learnings.entries(learnings.path_of(root, flow, "tasks")):
+        m = QUALITY_LINE.search(block)
+        if not m:
+            continue
+        try:
+            q = json.loads(m.group(1))
+        except ValueError:
+            continue
+        if not isinstance(q, dict):
+            continue
+        head = block.splitlines()[0][3:]
+        tid, _, name = head.partition(":")
+        num = lambda k: q[k] if isinstance(q.get(k), (int, float)) and not isinstance(q.get(k), bool) and q[k] >= 0 else 0
+        out.append({"id": tid.strip(), "title": name.strip(), "indexed": True, "cost": num("cost"),
+                    "tokens": [0, 0, 0, 0], "by": [], "unpriced": [],
+                    "quality": {"lane": str(q.get("lane") or "")[:20], "rounds": int(num("rounds")),
+                                "executor": str(q.get("executor") or "")[:20],
+                                "models": [str(x)[:20] for x in q.get("models", []) if isinstance(x, str)][:6],
+                                "sent_back": int(num("sent_back")), "refused": int(num("refused")),
+                                "fixes": int(num("fixes")), "delivered": True}})
+    return out
+
+
 def project_usage(root):
-    """Every task's tokens and cost, the most recent first: the page's cost view."""
+    """Every task's tokens, cost and quality, the most recent first: the page's cost view. A task
+    of the tasks file whose work directory is gone follows, with the numbers it was indexed with."""
     out = []
     for i, (wt, _branch) in enumerate(worktrees(root)):
         wdir = work_dir(wt)
@@ -1576,10 +1641,13 @@ def project_usage(root):
         flow, by_work = flow_of(wt), events(wdir)
         for tid in task_ids(wdir):
             evs = by_work.get(tid, [])
-            out.append({"wt": i, "worktree": os.path.basename(wt), "id": tid, "title": title(os.path.join(wdir, tid), tid),
+            tdir = os.path.join(wdir, tid)
+            out.append({"wt": i, "worktree": os.path.basename(wt), "id": tid, "title": title(tdir, tid),
                         "start": evs[0]["t"] if evs else None, "end": evs[-1]["t"] if evs else None,
-                        **task_usage(wt, evs, flow)})
+                        **task_usage(wt, evs, flow), "quality": task_quality(tdir, evs)})
     out.sort(key=lambda x: -(x["end"] or 0))
+    live = {x["id"] for x in out}
+    out += [x for x in indexed_tasks(root) if x["id"] not in live]
     return out
 
 

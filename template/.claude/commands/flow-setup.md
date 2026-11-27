@@ -142,9 +142,15 @@ then confirm:
    company script, `"tool": "custom"` with `"command"`, a template using `{base}`, `{branch}`,
    `{title}`, `{body_file}` and `{draft}`. Check the tool is installed and logged in (`gh auth
    status`, `glab auth status`) and say what to run if not.
+10. The models per tier (`tiers` in `flow.json`; `models` maps each lane to a tier per stage:
+   `fast`, `standard`, `deep`). Show the current table. Claude Code and Codex come filled (a
+   Claude alias; a reasoning effort). For each other tool the dev uses (Cursor, Copilot, Gemini
+   CLI), ask which model of their menu is fast, standard and deep; never suggest a name you
+   cannot see in their tool, and leave a tier empty when the dev does not say (the stage then
+   runs on that tool's default). Ask too whether a lane should move a stage to another tier.
 
 Edit only the sections of `.claude/agents/executor.md`, `tester.md` and `reviewer.md` (and the
-`model:` lines, and `checks`, `forge`, `forge_hosts`, `base_branches` or `ship` in `flow.json`) that these answers change, show the diff, and wait for the "ok". Then offer to
+`model:` lines, and `checks`, `forge`, `forge_hosts`, `base_branches`, `ship`, `models` or `tiers` in `flow.json`) that these answers change, show the diff, and wait for the "ok". Then offer to
 run the evals on the adapted agents: `python3 .claude/kit/evals/run.py --runs 3` (it calls the
 model and costs tokens).
 

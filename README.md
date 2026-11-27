@@ -32,7 +32,8 @@ commands, scripts and one hook that you install into a repository so the agents 
 | The purpose gets lost when the conversation is summarized | It lives on disk, in `.work/<ID>/00-purpose.md`, with numbered criteria (`AC-001`...) every stage cites |
 | The agent guesses where a choice is open | It writes `[NEEDS CLARIFICATION]` and asks you, one question at a time; nothing is built on a guess |
 | "Tests pass" | The tester reverts the fix and shows each test failing without it; the machine runs lint, build and tests before any reviewer |
-| One context checks its own work | Four reviewers in parallel, each with a clean context and its own lens: contract, security, QA, product (and the specialists you hire) |
+| One context checks its own work | Four reviewers in parallel, each with a clean context and its own lens: contract, security, QA, product (and the specialists you hire, including a second opinion from another vendor's model) |
+| Every stage on the most expensive model | The lane picks each stage's tier (the strongest model where the risk is, a cheaper one where the work is routine), in Claude Code, Codex, Cursor, Copilot or Gemini, and the Costs tab shows whether the cheaper runs needed more fix rounds |
 | Decisions you never saw | Every ruling taken without you is in a ledger, with its cost if wrong |
 | What a task learned is deleted with it | Learnings, kept decisions and one entry per task stay after cleanup, and the next task searches them first; an optional second brain (`/brain`) holds what the code does not say |
 | "Done" | Done means a pull or merge request exists, or you closed it yourself |
@@ -61,11 +62,11 @@ cd /path/to/your/repo && claude                  # then, inside the session:
 <td width="50%"><img src="assets/gifs/evidence.gif" alt="The proof's screenshots under the step, opened in a lightbox and paged with the arrow keys"><br><sub><b>Proof you can see.</b> The tester saves screenshots of each visual criterion under <code>evidence/</code> and cites them in the proof. They show as a gallery under the step; click for the lightbox, arrows to page.</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="assets/gifs/costs.gif" alt="The task's tokens and cost per agent, then the Costs tab with every task compared and where the tokens go"><br><sub><b>What each task costs.</b> Tokens and API-equivalent cost per agent, the cache hit rate, and on the Costs tab every task compared and where the money goes across all of them.</sub></td>
+<td width="50%"><img src="assets/gifs/costs.gif" alt="The task's tokens and cost per agent, then the Costs tab with every task compared, where the tokens go, and quality by lane and executor model"><br><sub><b>What each task costs, and what it cost in rework.</b> Tokens and API-equivalent cost per agent and per task, and quality by lane and executor model: fix rounds, stages sent back and cost per delivered task. A cheaper model shows whether it cost quality.</sub></td>
 <td width="50%"><img src="assets/gifs/fork.gif" alt="The parallel task popover: typing an ID and a base branch builds the whole command to create the worktree and open a session there"><br><sub><b>Parallel fronts.</b> <code>work.sh fork</code> opens a new worktree on its own branch for a second session: a hotfix or a review while the main task goes on. The page writes the whole command as you type.</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="assets/gifs/hire.gif" alt="The Crew panel's Hire a specialist cards: performance, accessibility, data migration and API compatibility reviewers, each with its command"><br><sub><b>Hire a specialist.</b> Ready reviewers (performance, accessibility, data migrations, API compatibility) join the crew with <code>/flow-agent add &lt;name&gt;</code>: a new lens in parallel, its own desk on the site.</sub></td>
+<td width="50%"><img src="assets/gifs/hire.gif" alt="The Crew panel's Hire a specialist cards: performance, accessibility, data migration, API compatibility and second-opinion reviewers, each with its command"><br><sub><b>Hire a specialist.</b> Ready reviewers (performance, accessibility, data migrations, API compatibility, and a second opinion from Codex or Gemini) join the crew with <code>/flow-agent add &lt;name&gt;</code>: a new lens in parallel, its own desk on the site.</sub></td>
 <td width="50%"><img src="assets/screenshots/now.jpg" alt="Waiting on you: the executor asks to run Bash, with Approve and Details, and the steps of the task under it"><br><sub><b>Needs you.</b> A question, a permission or the session's turn waits at the top, held for the page. You answer it there, in the terminal, or on Telegram.</sub></td>
 </tr>
 <tr>
@@ -193,6 +194,10 @@ Each group opens with a click. The short version is in the [tour](#a-tour-in-gif
   what a task had to discover. In the repository it is the team's; pointed at an absolute
   path it is your personal vault. The dashboard's Brain tab lists and searches all of it
   (pages, decisions, tasks, learnings), and `embeddings` in `flow.json` adds search by meaning.
+- **Keep the memory lean.** The files only grow, and every agent pays to read them.
+  `learnings.py --tidy` lists near-duplicate learnings and decisions, decisions already
+  superseded and entries no lens loads; the retrospective turns that list into proposals (the
+  merged entry, the one to drop) and nothing changes until you check them.
 
 </details>
 
@@ -234,6 +239,10 @@ Each group opens with a click. The short version is in the [tour](#a-tour-in-gif
   any worktree and before any task exists, shows under "waiting on you", with a badge on the
   worktree, the count in the tab title, a beep (with a mute) and a browser notification that
   shows the kind of alert, never the command.
+- **A desktop notification when no page is open.** `work.sh notify on` (once, for every
+  project): when a session waits on you and neither the dashboard nor the Telegram bridge is
+  open, macOS (or Linux, with `notify-send`) shows the project, the task and the kind of wait.
+  Never the command or the question.
 - **Answer from your phone.** With the Telegram bridge on (`work.sh telegram start`), what waits
   on you reaches a bot chat: a permission with Allow and Deny (with `work.sh ui allow on`;
   otherwise an alert to answer in the terminal), a question with its options, the
@@ -253,14 +262,27 @@ Each group opens with a click. The short version is in the [tour](#a-tour-in-gif
 </details>
 
 <details>
-<summary><b>Measure the cost</b></summary>
+<summary><b>Spend less, keep the quality</b></summary>
 
+- **The right model for each stage.** The lane you confirm in the triage also picks the model of
+  each stage (`models` in `flow.json`): out of the box, a Full task runs every stage on Opus,
+  a Light task runs on Sonnet except the refiner and the security reviewer, and a None task
+  runs on Sonnet except the security reviewer. In Claude Code the hook sets it on each launch, so
+  nobody has to remember. Stages ask for a tier (`fast`, `standard`, `deep`), so the same table
+  works in Codex (a reasoning effort), Cursor, Copilot and Gemini (a model you name), where
+  `work.sh status` gives the next stage's command or model. Say "use the strongest model on this
+  one" and the task gets a `Model:` line that wins for every stage.
 - **Know what each task costs.** The hook records what each subagent spent when it finishes,
   read from its own transcript; the main session's share comes from its transcript inside the
   task's time window. The task shows tokens and API-equivalent cost per agent, the token mix
   and the cache hit rate; the Costs tab compares every task and shows where the money goes.
   List prices per model are built in and `pricing` in `flow.json` overrides them; on a
   subscription it is what the same tokens would cost on the API.
+- **Know what the savings cost.** The Costs tab groups the tasks by lane and executor model:
+  fix rounds, stages the gate sent back and cost per delivered task, side by side. A cheaper
+  model is a saving only where its rework stays level, on at least three tasks each (the page
+  marks smaller groups). The numbers go into `TASKS.md` when a task is indexed, so tasks you
+  cleaned up still count.
 
 </details>
 
@@ -288,9 +310,13 @@ Each group opens with a click. The short version is in the [tour](#a-tour-in-gif
 <summary><b>Shape the crew</b></summary>
 
 - **Hire a ready specialist.** `/flow-agent catalog` lists reviewers that come with the kit
-  (performance, accessibility, data migrations, API compatibility), and
+  (performance, accessibility, data migrations, API compatibility, second opinion), and
   `/flow-agent add <name>` adds one as a lens in parallel, asking only what it should read in
   your repository. The Crew panel shows the same catalog with the command to copy.
+- **A second opinion from another vendor.** Reviewers of one model share its blind spots, clean
+  context or not. `/flow-agent add second-opinion-reviewer` adds a lens that sends the review
+  package to Codex or Gemini (`work.sh second-opinion`) and keeps only the findings it confirms
+  in the code; the rest are listed as not confirmed, with why.
 - **Your own specialists, in their own room.** `/flow-agent` interviews you and creates a
   specialized agent (a performance reviewer, an accessibility reviewer, a migration planner):
   its role file, its place in the flow (an extra review lens in parallel, a stage in the
@@ -614,6 +640,69 @@ page; the others answer in their terminals as usual.
    worktree and its local branch, and a review of Claude's auto memory about the task (the next
    prompt in that worktree lists the entries and you check the ones to delete).
 
+### Models, quality and a second opinion
+
+**Models per lane, in any tool.** On by default in a new install; nothing to do. A stage runs on
+a *tier* (`fast`, `standard`, `deep`), and each tool says what a tier is there. In
+`.claude/flow.json`:
+
+```json
+"models": {
+  "full": {"*": "deep"},
+  "light": {"*": "standard", "refiner": "deep", "security-reviewer": "deep"},
+  "none": {"*": "standard", "security-reviewer": "deep"}
+},
+"tiers": {
+  "claude": {"fast": "haiku", "standard": "sonnet", "deep": "opus"},
+  "codex": {"fast": "low", "standard": "medium", "deep": "high"},
+  "cursor": {}, "copilot": {}, "gemini": {}
+}
+```
+
+`models` maps each lane to a tier per stage (`"*"` for the rest); a lane or stage left out keeps
+the model in its agent file. `tiers` translates:
+
+| Tool | A tier is | How it is applied |
+| --- | --- | --- |
+| Claude Code | a model alias (`haiku`, `sonnet`, `opus`, `fable`) | the hook sets it on every stage it launches |
+| Codex | a reasoning effort (`low`, `medium`, `high`), which does not change name with each new model | `work.sh status` prints, under the next stage, `codex -c model_reasoning_effort=high "Act as .claude/agents/refiner.md. Work dir .work/<ID>."`: start the stage's new session with it |
+| Cursor | a model name from your model menu | `work.sh status` names it under the next stage; pick it in the new chat |
+| GitHub Copilot | a model name from your model picker | the same |
+| Gemini CLI | a model name | `work.sh status` prints `gemini -m <model> -i "..."` |
+
+Cursor, Copilot and Gemini start empty because their model names change too often to ship:
+fill the tiers with the names you use (`/flow-setup` asks), and until then the stage runs on
+the tool's default. Codex, Cursor and Copilot get their line once the kit was exported for them
+(`install.sh --tools`), Gemini once `tiers.gemini` has a value. An install from before this
+version has no `models` and runs as before.
+
+For one task, tell the agent ("use the strongest model on this one"): it writes `Model: deep`
+(or a Claude alias) under `Lane:` in `00-purpose.md`, which wins for every stage and every
+tool. `work.sh status` prints each stage's tier, and its Claude model, on its first line.
+
+**Did it cost quality?** Open the dashboard's Costs tab after a few tasks. Compare the rows of
+one lane: `light · sonnet` against `light · opus` (a task you ran with `Model: opus`). Fewer
+than three tasks in a row is marked: too few to call. If the cheaper model needs more fix rounds
+or more stages sent back, its saving is spent on rework; move that stage back up in `models`.
+
+**A second opinion.** Install and log in to [Codex](https://github.com/openai/codex) or
+[Gemini CLI](https://github.com/google-gemini/gemini-cli), then
+`/flow-agent add second-opinion-reviewer`. From the next task it runs with the other lenses:
+`work.sh second-opinion` sends the purpose, the contract and `review.diff` on stdin to
+`codex exec --sandbox read-only -` (or `gemini -p`), writes the answer to
+`.work/<ID>/second-opinion.md`, and the lens keeps the findings it confirms in the code. Another
+CLI: `"second_opinion": {"command": "<reads the prompt on stdin>", "timeout": 900}`. No CLI
+found: the lens says not applicable and the review goes on. The diff leaves your machine for
+that vendor.
+
+**Desktop notifications.** `work.sh notify on`, then `work.sh notify test` to see one (on
+macOS, allow notifications for your terminal app in System Settings if nothing shows). They
+fire only while no dashboard or Telegram bridge is open. `work.sh notify off` stops them.
+
+**Keep the memory lean.** Nothing to run: the retrospective runs `learnings.py --tidy` and, when
+it lists something, proposes the merges and drops under `## Proposed tidy` with the rest of its
+proposals. Run it yourself to see the list.
+
 ### Telegram (optional)
 
 1. Create a bot with [@BotFather](https://t.me/BotFather) and keep its token in your shell
@@ -665,6 +754,8 @@ Off by default. In `flow.json`:
 | `work.sh checks` | run `checks` of `flow.json` and write `checks.md`. Exits 1 when one fails |
 | `work.sh telegram start\|stop\|status` | the Telegram bridge, one for every project on the machine |
 | `work.sh telegram chat-id` | the chat id of the last messages sent to your bot |
+| `work.sh notify [on\|off\|test]` | desktop notifications when a session waits on you and no page is open, for every project of your user (default off) |
+| `work.sh second-opinion` | send the current task's review package to another vendor's CLI and write `second-opinion.md` (the second-opinion reviewer runs it) |
 | `work.sh ui start [--open]` / `ui stop` | local dashboard of every worktree's tasks, in the background (first free port from 8787); a dashboard already running serves this project too, and start prints its link with its key (`--open` opens the browser on it and prints no key) |
 | `work.sh ui [port]` | local dashboard in the foreground |
 | `work.sh ui answers [on\|off]` | let the dashboard answer this worktree's questions (default off) |
@@ -678,7 +769,8 @@ Off by default. In `flow.json`:
 | `learnings.py <tag> [...]` | print the learnings with those tags |
 | `learnings.py --untagged` | list learnings no reviewer will load |
 | `learnings.py --search <text>` | prior work, best first: learnings, decisions, finished tasks, brain pages (by words, or by meaning with `embeddings`) |
-| `learnings.py --index <ID>` | add a finished task to `TASKS.md` (once) |
+| `learnings.py --index <ID>` | add a finished task to `TASKS.md` (once), with its lane, models, fix rounds and cost |
+| `learnings.py --tidy` | what to merge or drop in `LEARNINGS.md` and `DECISIONS.md`: near duplicates, superseded decisions, untagged entries (changes nothing) |
 | `/brain on\|add\|ask\|lint` | the project's second brain (optional) |
 | `export.py [--tools cursor,codex,copilot] [--check]` | regenerate the files for the other tools |
 | `evals/run.py [case...] [--runs N] [--control]` | run the behavior evals of the agents (calls the model) |
@@ -733,6 +825,7 @@ serve. Agents use them for that and never install anything themselves.
 | Reviewers in parallel | yes | one chat per reviewer | one session per reviewer | one chat per reviewer |
 | Gates | hook (refuses an early stage, sends back an incomplete one), plus `work.sh status` | `work.sh status` | `work.sh status` | `work.sh status` |
 | Fix-round cap | enforced by the hook | by the orchestrator | by the orchestrator | by the orchestrator |
+| Model per lane | set by the hook | named by `work.sh status` (`tiers.cursor`) | `work.sh status` prints the command with the effort | named by `work.sh status` (`tiers.copilot`) |
 | Dashboard | stages, rulings and live agent lanes | stages and rulings | stages and rulings | stages and rulings |
 
 ## Files added to your repository
@@ -762,6 +855,7 @@ And per task, in `.work/<ID>/` (git-ignored):
 00-purpose.md   ledger.md   01-contract.md   02-change.md   03-proof.md
 review.diff     checks.md      04-review-{contract,security,qa,product}.md     05-retro.md
 findings-decision.md   closed   evidence/ (screenshots the proof cites)
+second-opinion.md (with the second-opinion reviewer)
 ```
 
 ## Configuration
@@ -772,6 +866,15 @@ findings-decision.md   closed   evidence/ (screenshots the proof cites)
   starts with a `Status:` or a `Verdict:` line, the section that must cite every `AC-###`
   (`covers`), and the stages that must pass before it may start (`requires`).
 - `max_fix_rounds`: executor rounds before open findings go to you (default 3).
+- `models`: the tier of each stage per lane, `{"<lane>": {"<stage>": "fast|standard|deep",
+  "*": ...}}` (a Claude alias is read as its tier). Missing: each agent's own. A task's `Model:`
+  line in `00-purpose.md` wins.
+- `tiers`: what each tier is per tool, `{"claude": {"fast": "haiku", ...}, "codex": {"fast":
+  "low", ...}, "cursor": {...}, "copilot": {...}, "gemini": {...}}`: a Claude alias, a Codex
+  reasoning effort, or a model name. See
+  [Models, quality and a second opinion](#models-quality-and-a-second-opinion).
+- `second_opinion`: the command the second-opinion reviewer runs, `{"command": "...", "timeout":
+  900}`; it reads the prompt on stdin. Missing: `codex` or `gemini`, whichever is on `PATH`.
 - `checks`: the commands the machine runs before the reviewers, each
   `{"name": "unit", "run": "pytest -q", "timeout": 900}`. Empty: no gate. `/flow-setup stack`
   fills it.
@@ -869,7 +972,13 @@ confirm it fails, then fix the agent's file until it passes.
   What it sends leaves your machine for Telegram's servers: commands are masked like the event
   log, and `"telegram": {"details": false}` sends none.
 - The checks run the commands written in `flow.json` with the shell, like a Makefile: review a
-  change to `checks` as you would one to your CI.
+  change to `checks` as you would one to your CI. So does `second_opinion.command`.
+- The second-opinion reviewer sends the purpose, the contract and the diff to another vendor
+  (OpenAI with Codex, Google with Gemini), so add it only where that is allowed. Codex runs with a
+  read-only sandbox. Its answer is masked like the event log before it is written.
+- Desktop notifications carry the project, the task id and the kind of wait, never the command,
+  the question or the session's text; they are passed to `osascript` or `notify-send` as
+  arguments, never as script.
 
 ### Web answers
 
@@ -897,6 +1006,8 @@ unreadable, and do not paste the dashboard link into a session. `/task` opens th
 - The agents' behavior is checked by evals you run, not proven. Run them after adapting an
   agent, and add a case when one fails in real use.
 - Parallel reviewers need subagents, so only Claude Code runs them at the same time.
+- Models per lane are set automatically only in Claude Code. In Codex, Cursor, Copilot and
+  Gemini `work.sh status` says what the next stage runs on, and you start it that way.
 - Costs are counted for Claude Code only, from the tasks run with this version of the kit
   on. The main session's share is an estimate: its replies inside the task's time window, so two
   tasks of one session at the same time share replies.
@@ -947,8 +1058,9 @@ Covers the gates, readiness, the fix-round cap, the event log masking, the revie
 exports, the eval graders, the dashboard, the attention alerts and web answers, the hook
 wiring, the closing statuses with the GitHub and GitLab lookups, the cleanup, the stage digests, the
 evidence endpoint, the cost per task, `work.sh fork`, the specialists' catalog, the task index,
-the prior-work search (ranking, plurals, symlinks, the embeddings cache and fallback) and the
-Brain tab's data. `test_page.py`
+the prior-work search (ranking, plurals, symlinks, the embeddings cache and fallback), the
+Brain tab's data, the model routing per lane, the quality per task (and its copy in `TASKS.md`),
+`--tidy`, the desktop notifications and the second opinion. `test_page.py`
 checks the dashboard page without a browser: both languages carry every label the server can
 return, no English text is left outside the dictionary, noise starts collapsed, the
 cleanup posts only what the plan offered, and the Brain tab escapes every note and reads only

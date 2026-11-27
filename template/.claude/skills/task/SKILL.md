@@ -58,6 +58,14 @@ Close the triage with `AskUserQuestion`: one option per lane, the recommended on
 label ending in "(Recommended)" and the why in its description. A question can be answered from
 the dashboard when the dev opted in; a free-text "ok" cannot. Then:
 
+**Models.** The lane also picks the tier of each stage (`fast`, `standard` or `deep`: `models`
+in `flow.json`), and `tiers` says what each tier is in each tool. In Claude Code the hook sets
+the model on the Agent call, so never pass `model` yourself. When the dev asks for one tier or
+model for the whole task ("use the strongest model on this one"), write `Model: <tier>` (or a
+Claude alias: `haiku`, `sonnet`, `opus`, `fable`) under the `Lane:` line; it wins over the
+lane's table. `work.sh status` shows the tier of each stage and, under the next stage, how to
+start it on that tier in Codex, Cursor, Copilot or Gemini.
+
 ```
 bash .claude/kit/scripts/work.sh init <ID> "<title>"
 ```
@@ -180,8 +188,10 @@ are decided:
 2. Show the dev the verdicts, the "Out of purpose" items, the rulings in `ledger.md`, and the
    proposals. Ask with `AskUserQuestion` `multiSelect` which to keep, then append the approved
    learnings to the learnings file, the approved decisions to the decisions file (`decisions` in
-   `flow.json`; mark one it replaces `Superseded by: <slug>`), and apply the approved brain
-   updates as `/brain add` would. Nothing the dev did not check is written.
+   `flow.json`; mark one it replaces `Superseded by: <slug>`), apply the approved brain
+   updates as `/brain add` would, and the approved tidy items (a merge replaces both entries
+   with the merged one, a drop deletes the entry, a tag adds its line). Nothing the dev did not
+   check is written.
 3. `python3 .claude/kit/scripts/learnings.py --index <ID>` adds the task to the tasks file
    (purpose, criteria, PR), so a later task finds it after this one's work directory is deleted.
 
@@ -235,7 +245,8 @@ A memory request reaches the next prompt or session in that worktree as context:
 auto-memory entries about the task with `AskUserQuestion` `multiSelect` and delete only the
 checked ones.
 
-Without subagents (Cursor, Codex, Copilot, another client): run each stage in a **new
+Without subagents (Cursor, Codex, Copilot, Gemini, another client): run each stage in a **new
 conversation** with the role file `.claude/agents/<role>.md` as the instruction and the work
-directory path, and run `work.sh status` between stages. The same conversation that wrote the
+directory path, on the model `work.sh status` names for it, and run `work.sh status` between
+stages. The same conversation that wrote the
 code reviews it with the same blind spot.

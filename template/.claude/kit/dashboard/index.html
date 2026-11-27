@@ -349,6 +349,8 @@
   .tag-here { font-size:10px; font-weight:700; color:#111; background:var(--accent); border-radius:3px; padding:0 5px; margin-left:4px }
   table.mix { width:auto } table.mix th { font-weight:400; color:var(--mute); text-align:left; font-size:11px; padding:2px 14px 2px 0 } table.mix td { font-variant-numeric:tabular-nums; border:0; padding:2px 14px 2px 0; font-size:13px }
   .usage-note { margin-top:10px }
+  .qrows { display:grid; gap:6px } .qrow { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 10px; font-size:12px; display:grid; gap:4px }
+  .qstats { display:flex; flex-wrap:wrap; gap:4px 14px; color:var(--mute) } .qstats b { color:var(--fg); font-variant-numeric:tabular-nums }
   @media (prefers-reduced-motion: reduce) { .digest, .shot, .shot img, .toast, .toast.out, .toast .bar, .flash, .lb-stage img, .hire-card, .hire-card .bot { animation:none !important; transition:none !important } }
 </style>
 </head>
@@ -911,6 +913,14 @@ const I18N = /* i18n:begin */{
   "cost.onscreen": "on screen",
   "cost.empty": "No task has recorded token use yet.",
   "cost.loading": "Reading the transcripts…",
+  "q.title": "Quality by lane and executor model",
+  "q.count": "{n} task(s), {d} delivered",
+  "q.rounds": "fix rounds",
+  "q.back": "sent back",
+  "q.per": "per delivered task",
+  "q.few": "fewer than 3 tasks",
+  "q.note": "Rounds and sent back are per task, on average. A fix round is the executor running again after the reviews; sent back is a stage the gate returned for an incomplete file. A cheaper executor model is a saving only where its rounds and stages sent back stay level with the more expensive one, on at least 3 tasks each. Cleaned-up tasks count with the numbers kept in the tasks file.",
+  "q.rounds1": "{n} fix round(s)",
   "digest.acs": "AC {n}/{total} cited",
   "shots.n": "{n} screenshot(s)",
   "lb.title": "Screenshot",
@@ -1423,6 +1433,14 @@ const I18N = /* i18n:begin */{
   "cost.onscreen": "na tela",
   "cost.empty": "Nenhuma tarefa registrou uso de tokens ainda.",
   "cost.loading": "Lendo as transcrições…",
+  "q.title": "Qualidade por lane e modelo do executor",
+  "q.count": "{n} tarefa(s), {d} entregue(s)",
+  "q.rounds": "rodadas de correção",
+  "q.back": "devoluções",
+  "q.per": "por tarefa entregue",
+  "q.few": "menos de 3 tarefas",
+  "q.note": "Rodadas e devoluções são por tarefa, em média. Uma rodada de correção é o executor rodando de novo depois das revisões; devolvida é uma etapa que o gate mandou de volta por arquivo incompleto. Um modelo mais barato no executor só economiza onde as rodadas e as devoluções ficam no nível do mais caro, com pelo menos 3 tarefas em cada. Tarefas já limpas contam com os números guardados no arquivo de tarefas.",
+  "q.rounds1": "{n} rodada(s) de correção",
   "digest.acs": "AC {n}/{total} citados",
   "shots.n": "{n} captura(s)",
   "lb.title": "Captura de tela",
@@ -3185,10 +3203,27 @@ async function loadUsage(force) {
   }
   renderCost();
 }
+// Rework next to cost, per lane and executor's model: did the cheaper model cost rounds?
+function qualityTable(all) {
+  const groups = {};
+  all.filter(x => x.quality && x.quality.lane).forEach(x => {
+    const q = x.quality, key = q.executor ? q.lane + " · " + q.executor : q.lane;
+    const g = groups[key] || (groups[key] = { key, n: 0, done: 0, rounds: 0, back: 0, cost: 0 });
+    g.n++; g.rounds += q.rounds || 0; g.back += q.sent_back || 0;
+    if (q.delivered) { g.done++; g.cost += x.cost || 0 }
+  });
+  const gs = Object.values(groups).sort((a, b) => a.key.localeCompare(b.key));
+  if (!gs.length) return "";
+  const avg = (v, n) => (v / n).toFixed(1);
+  return `<h3 class="sub-h">${t("q.title")}</h3><div class="qrows">` + gs.map(g =>
+    `<div class="qrow"><div><b>${esc(g.key)}</b> <span class="meta">${t("q.count", { n: g.n, d: g.done })}${g.n < 3 ? " · " + t("q.few") : ""}</span></div>` +
+    `<div class="qstats"><span><b>${avg(g.rounds, g.n)}</b> ${t("q.rounds")}</span><span><b>${avg(g.back, g.n)}</b> ${t("q.back")}</span><span><b>${g.done ? fmtUsd(g.cost / g.done) : "—"}</b> ${t("q.per")}</span></div></div>`).join("") +
+    `</div><div class="meta usage-note">${t("q.note")}</div>`;
+}
 function renderCost() {
   if (usageAll == null) { setHTML($("cost"), `<div class="meta">${t("cost.loading")}</div>`); return }
   const xs = usageAll.filter(x => sumTok(x.tokens) > 0);
-  if (!xs.length) { setHTML($("cost"), `<div class="meta">${t("cost.empty")}</div>`); return }
+  if (!xs.length) { setHTML($("cost"), `<div class="meta">${t("cost.empty")}</div>` + qualityTable(usageAll)); return }
   const total = xs.reduce((a, x) => a + x.cost, 0), tok = xs.reduce((a, x) => a + sumTok(x.tokens), 0), byCost = total > 0;
   const val = (cost, v) => byCost ? cost : sumTok(v);
   const where = {};
@@ -3202,12 +3237,12 @@ function renderCost() {
     `<h3 class="sub-h">${t("cost.title")}</h3>` + barRows(tasks.map(x => {
       const here = !!sel && sel.wt === x.wt && sel.id === x.id;
       return { key: x.wt + "/" + x.id, here, value: val(x.cost, x.tokens), title: tokTitle(x.tokens),
-        label: `<span><b>${esc(x.id)}</b> <span class="meta">${esc(x.title || x.worktree)}</span></span>${here ? `<span class="tag-here">${t("cost.onscreen")}</span>` : ""}`,
+        label: `<span><b>${esc(x.id)}</b> <span class="meta">${esc(x.title || x.worktree)}${x.quality && x.quality.rounds ? " · " + t("q.rounds1", { n: x.quality.rounds }) : ""}</span></span>${here ? `<span class="tag-here">${t("cost.onscreen")}</span>` : ""}`,
         text: `${fmtUsd(x.cost)} <span class="meta">${fmtTok(sumTok(x.tokens))}</span>` };
     })) +
     `<h3 class="sub-h">${t("cost.where")}</h3>` + barRows(ws.map(w => ({ value: val(w.cost, w.tokens), title: tokTitle(w.tokens),
       label: `${avatarImg(w.type, 24)}<span>${esc(whoName(w.type))}</span>`, text: `${fmtUsd(w.cost)} <span class="meta">${fmtTok(sumTok(w.tokens))}</span>` }))) +
-    usageNote(unpriced));
+    usageNote(unpriced) + qualityTable(usageAll));
   $("cost").querySelectorAll("[data-go-task]").forEach(r => {
     const go = () => { const [w, id] = r.dataset.goTask.split("/"); select(+w, id); setTab("tree") };
     r.onclick = go; r.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go() } };

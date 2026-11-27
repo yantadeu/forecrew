@@ -9,7 +9,8 @@ orchestrator only carries paths and one-line statuses.
 
 ```
 .work/<ID>/                 git-ignored, one per task (any ticket id, or a slug)
-  00-purpose.md             orchestrator: lane, acceptance criteria AC-001..., decisions, clarifications
+  00-purpose.md             orchestrator: lane (and `Model:` when the dev picks one model for the
+                            task), acceptance criteria AC-001..., decisions, clarifications
   ledger.md                 base commit, and every decision an agent took without asking
   01-contract.md            refiner
   02-change.md              executor
@@ -20,6 +21,8 @@ orchestrator only carries paths and one-line statuses.
   checks.md                 work.sh checks (review-package runs it): the project's lint, build and
                             test commands run by the machine, with a fingerprint of the tree
   04-review-<lens>.md       one per reviewer lens, written in parallel
+  second-opinion.md         work.sh second-opinion: another vendor's answer on the same package,
+                            which the second-opinion reviewer (if hired) filters
   05-retro.md               retrospective: what went wrong, proposed learnings, decisions and
                             brain updates
   findings-decision.md      orchestrator, after the dev picked which findings get fixed
