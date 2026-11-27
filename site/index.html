@@ -145,7 +145,7 @@ footer a{color:var(--ink2)}
         <tr><td>The agent picks between two readings on its own.</td><td>It writes <code>[NEEDS CLARIFICATION]</code> and asks you, one question at a time. Nothing is built on a guess.</td></tr>
         <tr><td>"Tests pass."</td><td>The tester reverts the fix and shows each test failing without it. Lint, build and tests run on the exact diff before any review.</td></tr>
         <tr><td>One context checks its own work.</td><td>Contract, security, QA and product reviewers run in parallel, each in a clean context, on the same diff. Optionally, another vendor's model reads it too.</td></tr>
-        <tr><td>Every stage on the most expensive model.</td><td>The lane picks each stage's model: Opus where the risk is, Sonnet where the work is routine. The Costs tab shows whether the cheaper runs needed more fix rounds.</td></tr>
+        <tr><td>Every stage on the most expensive model.</td><td>The lane picks each stage's tier: the strongest model where the risk is, a cheaper one where the work is routine, in Claude Code, Codex, Cursor, Copilot or Gemini. The Costs tab shows whether the cheaper runs needed more fix rounds.</td></tr>
         <tr><td>Decisions you never saw.</td><td>Every ruling taken without you goes in <code>ledger.md</code>, with what it costs if wrong.</td></tr>
         <tr><td>Each task starts from zero, and cleaning it up deletes what it learned.</td><td>Learnings, kept decisions and one entry per finished task outlive the cleanup, and the next task searches them before its contract.</td></tr>
         <tr><td>"Done."</td><td>Done means a pull request exists, or you closed the task yourself.</td></tr>
@@ -197,20 +197,20 @@ footer a{color:var(--ink2)}
 <section id="models">
   <div class="narrow">
     <h2>Models and quality</h2>
-    <p>The lane you confirm in the triage also picks the model of each stage. The hook sets it when the stage launches, so nobody has to remember. Out of the box:</p>
+    <p>The lane you confirm in the triage also picks the tier of each stage. In Claude Code the hook sets the model when the stage launches. In Codex, Cursor, Copilot and Gemini, where you open each stage yourself, <code>work.sh status</code> prints the command (Codex: the reasoning effort) or the model to pick. Out of the box:</p>
   </div>
   <div class="scroll">
     <table>
-      <thead><tr><th>Lane</th><th>When</th><th>Models</th></tr></thead>
+      <thead><tr><th>Lane</th><th>When</th><th>Tier (Claude Code · Codex)</th></tr></thead>
       <tbody>
-        <tr><td>Full</td><td>Irreversible, regulated, an external contract.</td><td>Opus on every stage.</td></tr>
-        <tr><td>Light</td><td>A real behavior change with one clear reading.</td><td>Sonnet, except the refiner and the security reviewer on Opus.</td></tr>
-        <tr><td>None</td><td>Trivial, no behavior change.</td><td>Sonnet, except the security reviewer on Opus.</td></tr>
+        <tr><td>Full</td><td>Irreversible, regulated, an external contract.</td><td>Deep on every stage (Opus · high effort).</td></tr>
+        <tr><td>Light</td><td>A real behavior change with one clear reading.</td><td>Standard (Sonnet · medium), except the refiner and the security reviewer on deep.</td></tr>
+        <tr><td>None</td><td>Trivial, no behavior change.</td><td>Standard, except the security reviewer on deep.</td></tr>
       </tbody>
     </table>
   </div>
   <div class="narrow" style="margin-top:28px">
-    <p>Change it under <code>models</code> in <code>flow.json</code>, or say "use opus on this one" for a single task. A saving only counts if the work holds up, so the Costs tab puts the rework next to the cost: fix rounds, stages sent back and cost per delivered task, by lane and executor model (Fig. 4). When one model's blind spots are the worry, hire the second-opinion reviewer: Codex or Gemini reads the same diff, and only the findings confirmed in the code stay.</p>
+    <p>Change it under <code>models</code> and <code>tiers</code> in <code>flow.json</code> (Cursor, Copilot and Gemini take the model names you use), or say "use the strongest model on this one" for a single task. A saving only counts if the work holds up, so the Costs tab puts the rework next to the cost: fix rounds, stages sent back and cost per delivered task, by lane and executor model (Fig. 4). When one model's blind spots are the worry, hire the second-opinion reviewer: Codex or Gemini reads the same diff, and only the findings confirmed in the code stay.</p>
   </div>
 </section>
 
@@ -242,7 +242,7 @@ footer a{color:var(--ink2)}
         <tr><td>Agents</td><td>subagents</td><td>rules</td><td>role files in <code>AGENTS.md</code></td><td><code>.github/agents/</code></td></tr>
         <tr><td>Reviewers in parallel</td><td>yes</td><td>one chat each</td><td>one session each</td><td>one chat each</td></tr>
         <tr><td>Gates</td><td>live hook</td><td><code>work.sh status</code></td><td><code>work.sh status</code></td><td><code>work.sh status</code></td></tr>
-        <tr><td>Model per lane</td><td>set by the hook</td><td>the agent's own</td><td>the agent's own</td><td>the agent's own</td></tr>
+        <tr><td>Model per lane</td><td>set by the hook</td><td>named by <code>work.sh status</code></td><td>command with the effort</td><td>named by <code>work.sh status</code></td></tr>
         <tr><td>Dashboard</td><td>stages, rulings, live agents</td><td>stages, rulings</td><td>stages, rulings</td><td>stages, rulings</td></tr>
       </tbody>
     </table>

@@ -4054,9 +4054,38 @@ def routing_quality_notify():
         out = run(repo, [HOOK], {"hook_event_name": "PreToolUse", "tool_name": "Agent",
                                  "tool_input": {"subagent_type": "executor", "prompt": "work dir .work/T-1"}})[1]
         assert '"deny"' in out and "updatedInput" not in out, "a refused stage is refused, not rerouted"
-        assert "refiner opus" in run(repo, [WORK_SH, "status"])[1], "status shows the routed models"
+        assert "refiner deep (opus)" in run(repo, [WORK_SH, "status"])[1], "status shows the tier and the Claude model"
+        purpose(extra="\nModel: fast", lane="Full")
+        assert routed("refiner") == "haiku", "a tier on the Model: line maps through tiers.claude"
         purpose(lane="Full")
-        assert routed("refiner") is None, "a lane without a table keeps the agent's own model"
+        assert routed("refiner") == "opus", "Full: every stage deep"
+
+        # Other tools: tiers say what each tier is there; status gives the next stage's command.
+        flow = json.load(open(os.path.join(repo, ".claude", "flow.json")))
+        status_of = lambda: run(repo, [WORK_SH, "status"])[1]
+        assert "codex:" not in status_of() and "cursor:" not in status_of(), "no other tool installed: no hints"
+        open(os.path.join(repo, "AGENTS.md"), "w").write("<!-- agent-flow-kit:begin -->\n<!-- agent-flow-kit:end -->\n")
+        assert 'codex: codex -c model_reasoning_effort=high "Act as .claude/agents/refiner.md. Work dir .work/T-1."' in status_of()
+        os.makedirs(os.path.join(repo, ".cursor", "rules"))
+        open(os.path.join(repo, ".cursor", "rules", "task.mdc"), "w").write("x")
+        assert "cursor:" not in status_of(), "cursor without tiers.cursor: nothing to name"
+        flow["tiers"]["cursor"] = {"deep": "big-model-1"}
+        flow["tiers"]["gemini"] = {"deep": "gem-pro; rm -rf /"}
+        flow["tiers"]["claude"]["deep"] = "sonnet"
+        open(os.path.join(repo, ".claude", "flow.json"), "w").write(json.dumps(flow))
+        out = status_of()
+        assert "cursor: a new chat on big-model-1, with @agent-refiner" in out and "gemini" not in out, \
+            "a value that is not a plain model name is never printed into a command"
+        assert routed("refiner") == "sonnet", "tiers.claude decides what deep is in Claude Code"
+        flow["tiers"]["gemini"] = {"deep": "gem-pro"}
+        open(os.path.join(repo, ".claude", "flow.json"), "w").write(json.dumps(flow))
+        assert 'gemini: gemini -m gem-pro -i "Act as .claude/agents/refiner.md' in status_of()
+        purpose(lane="Light")
+        assert "model_reasoning_effort=high" in status_of(), "light refiner is deep"
+        shutil.rmtree(os.path.join(repo, ".cursor"))
+        os.remove(os.path.join(repo, "AGENTS.md"))
+        flow = json.load(open(FLOW))
+        open(os.path.join(repo, ".claude", "flow.json"), "w").write(json.dumps(flow))
 
         # Quality: rounds, stages sent back, fixes, delivery; kept in the tasks file after cleanup.
         d = load_dashboard("dash_quality")

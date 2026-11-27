@@ -65,7 +65,8 @@ def cursor():
     guide = ("\n## In Cursor\n\nCursor has no subagents here: run each stage in a new chat, "
              "attaching the role rule (" + ", ".join(f"`@agent-{n}`" for n in names) +
              ") and the work directory path. The stage gate hook is Claude Code only: "
-             "`bash .claude/kit/scripts/work.sh status` is the gate.\n")
+             "`bash .claude/kit/scripts/work.sh status` is the gate. It also names the model the next "
+             "stage runs on in Cursor (`tiers.cursor` in `.claude/flow.json`): pick it in the chat's model menu.\n")
     out[".cursor/rules/task.mdc"] = mdc(meta.get("description", "Agent flow"), body + guide + "\n" + protocol)
     for p in roles():
         m, b = split(p)
@@ -106,7 +107,9 @@ def codex():
         lines.append(f"- `{name}`: `.claude/agents/{name}.md`. {m.get('description', '').split('. ')[0].rstrip('.')}.")
     lines += ["",
               "- Before each next stage run `bash .claude/kit/scripts/work.sh status`: it checks every",
-              "  stage file and exits non-zero on a missing section or a `FAIL` verdict.",
+              "  stage file and exits non-zero on a missing section or a `FAIL` verdict. Under the next",
+              "  stage it prints the `codex` command that starts it with the reasoning effort its lane",
+              "  asks for (`tiers.codex` in `.claude/flow.json`): start the new session with that command.",
               "- Setup: when the dev asks to set up the flow, or names the task tracker or where",
               "  product documentation lives, follow `.claude/commands/flow-setup.md`.",
               "- Specialized agents (create, move, remove, and their room): follow `.claude/commands/flow-agent.md`.",

@@ -33,7 +33,7 @@ commands, scripts and one hook that you install into a repository so the agents 
 | The agent guesses where a choice is open | It writes `[NEEDS CLARIFICATION]` and asks you, one question at a time; nothing is built on a guess |
 | "Tests pass" | The tester reverts the fix and shows each test failing without it; the machine runs lint, build and tests before any reviewer |
 | One context checks its own work | Four reviewers in parallel, each with a clean context and its own lens: contract, security, QA, product (and the specialists you hire, including a second opinion from another vendor's model) |
-| Every stage on the most expensive model | The lane picks each stage's model (Opus where the risk is, Sonnet where the work is routine), and the Costs tab shows whether the cheaper runs needed more fix rounds |
+| Every stage on the most expensive model | The lane picks each stage's tier (the strongest model where the risk is, a cheaper one where the work is routine), in Claude Code, Codex, Cursor, Copilot or Gemini, and the Costs tab shows whether the cheaper runs needed more fix rounds |
 | Decisions you never saw | Every ruling taken without you is in a ledger, with its cost if wrong |
 | What a task learned is deleted with it | Learnings, kept decisions and one entry per task stay after cleanup, and the next task searches them first; an optional second brain (`/brain`) holds what the code does not say |
 | "Done" | Done means a pull or merge request exists, or you closed it yourself |
@@ -267,9 +267,11 @@ Each group opens with a click. The short version is in the [tour](#a-tour-in-gif
 - **The right model for each stage.** The lane you confirm in the triage also picks the model of
   each stage (`models` in `flow.json`): out of the box, a Full task runs every stage on Opus,
   a Light task runs on Sonnet except the refiner and the security reviewer, and a None task
-  runs on Sonnet except the security reviewer. The hook sets it on each launch, so nobody has
-  to remember. Say "use opus on this one" and the task gets a `Model:` line that wins for every
-  stage. `work.sh status` shows what each stage runs on.
+  runs on Sonnet except the security reviewer. In Claude Code the hook sets it on each launch, so
+  nobody has to remember. Stages ask for a tier (`fast`, `standard`, `deep`), so the same table
+  works in Codex (a reasoning effort), Cursor, Copilot and Gemini (a model you name), where
+  `work.sh status` gives the next stage's command or model. Say "use the strongest model on this
+  one" and the task gets a `Model:` line that wins for every stage.
 - **Know what each task costs.** The hook records what each subagent spent when it finishes,
   read from its own transcript; the main session's share comes from its transcript inside the
   task's time window. The task shows tokens and API-equivalent cost per agent, the token mix
@@ -640,22 +642,43 @@ page; the others answer in their terminals as usual.
 
 ### Models, quality and a second opinion
 
-**Models per lane.** On by default in a new install; nothing to do. To change it, edit `models`
-in `.claude/flow.json`:
+**Models per lane, in any tool.** On by default in a new install; nothing to do. A stage runs on
+a *tier* (`fast`, `standard`, `deep`), and each tool says what a tier is there. In
+`.claude/flow.json`:
 
 ```json
 "models": {
-  "light": {"*": "sonnet", "refiner": "opus", "security-reviewer": "opus"},
-  "none": {"*": "sonnet", "security-reviewer": "opus"}
+  "full": {"*": "deep"},
+  "light": {"*": "standard", "refiner": "deep", "security-reviewer": "deep"},
+  "none": {"*": "standard", "security-reviewer": "deep"}
+},
+"tiers": {
+  "claude": {"fast": "haiku", "standard": "sonnet", "deep": "opus"},
+  "codex": {"fast": "low", "standard": "medium", "deep": "high"},
+  "cursor": {}, "copilot": {}, "gemini": {}
 }
 ```
 
-Each lane (`full`, `light`, `none`) maps a stage to `haiku`, `sonnet`, `opus` or `fable`; `"*"` is
-every stage the lane does not name, and a lane or stage left out keeps the model in its agent
-file (`opus`). An install from before this version has no `models` and runs as before. For one
-task, tell the agent ("use opus on this one"): it writes `Model: opus` under `Lane:` in
-`00-purpose.md`, which wins for every stage. `work.sh status` prints the routed stages on its
-first line.
+`models` maps each lane to a tier per stage (`"*"` for the rest); a lane or stage left out keeps
+the model in its agent file. `tiers` translates:
+
+| Tool | A tier is | How it is applied |
+| --- | --- | --- |
+| Claude Code | a model alias (`haiku`, `sonnet`, `opus`, `fable`) | the hook sets it on every stage it launches |
+| Codex | a reasoning effort (`low`, `medium`, `high`), which does not change name with each new model | `work.sh status` prints, under the next stage, `codex -c model_reasoning_effort=high "Act as .claude/agents/refiner.md. Work dir .work/<ID>."`: start the stage's new session with it |
+| Cursor | a model name from your model menu | `work.sh status` names it under the next stage; pick it in the new chat |
+| GitHub Copilot | a model name from your model picker | the same |
+| Gemini CLI | a model name | `work.sh status` prints `gemini -m <model> -i "..."` |
+
+Cursor, Copilot and Gemini start empty because their model names change too often to ship:
+fill the tiers with the names you use (`/flow-setup` asks), and until then the stage runs on
+the tool's default. Codex, Cursor and Copilot get their line once the kit was exported for them
+(`install.sh --tools`), Gemini once `tiers.gemini` has a value. An install from before this
+version has no `models` and runs as before.
+
+For one task, tell the agent ("use the strongest model on this one"): it writes `Model: deep`
+(or a Claude alias) under `Lane:` in `00-purpose.md`, which wins for every stage and every
+tool. `work.sh status` prints each stage's tier, and its Claude model, on its first line.
 
 **Did it cost quality?** Open the dashboard's Costs tab after a few tasks. Compare the rows of
 one lane: `light · sonnet` against `light · opus` (a task you ran with `Model: opus`). Fewer
@@ -802,7 +825,7 @@ serve. Agents use them for that and never install anything themselves.
 | Reviewers in parallel | yes | one chat per reviewer | one session per reviewer | one chat per reviewer |
 | Gates | hook (refuses an early stage, sends back an incomplete one), plus `work.sh status` | `work.sh status` | `work.sh status` | `work.sh status` |
 | Fix-round cap | enforced by the hook | by the orchestrator | by the orchestrator | by the orchestrator |
-| Model per lane | set by the hook | the agent's own | the agent's own | the agent's own |
+| Model per lane | set by the hook | named by `work.sh status` (`tiers.cursor`) | `work.sh status` prints the command with the effort | named by `work.sh status` (`tiers.copilot`) |
 | Dashboard | stages, rulings and live agent lanes | stages and rulings | stages and rulings | stages and rulings |
 
 ## Files added to your repository
@@ -843,8 +866,12 @@ second-opinion.md (with the second-opinion reviewer)
   starts with a `Status:` or a `Verdict:` line, the section that must cite every `AC-###`
   (`covers`), and the stages that must pass before it may start (`requires`).
 - `max_fix_rounds`: executor rounds before open findings go to you (default 3).
-- `models`: the model of each stage per lane, `{"<lane>": {"<stage>": "haiku|sonnet|opus|fable",
-  "*": ...}}`. Missing: each agent's own. A task's `Model:` line in `00-purpose.md` wins. See
+- `models`: the tier of each stage per lane, `{"<lane>": {"<stage>": "fast|standard|deep",
+  "*": ...}}` (a Claude alias is read as its tier). Missing: each agent's own. A task's `Model:`
+  line in `00-purpose.md` wins.
+- `tiers`: what each tier is per tool, `{"claude": {"fast": "haiku", ...}, "codex": {"fast":
+  "low", ...}, "cursor": {...}, "copilot": {...}, "gemini": {...}}`: a Claude alias, a Codex
+  reasoning effort, or a model name. See
   [Models, quality and a second opinion](#models-quality-and-a-second-opinion).
 - `second_opinion`: the command the second-opinion reviewer runs, `{"command": "...", "timeout":
   900}`; it reads the prompt on stdin. Missing: `codex` or `gemini`, whichever is on `PATH`.
@@ -979,8 +1006,8 @@ unreadable, and do not paste the dashboard link into a session. `/task` opens th
 - The agents' behavior is checked by evals you run, not proven. Run them after adapting an
   agent, and add a case when one fails in real use.
 - Parallel reviewers need subagents, so only Claude Code runs them at the same time.
-- Models per lane are set by the Claude Code hook. In Cursor, Codex and Copilot each agent runs
-  on whatever that tool picks.
+- Models per lane are set automatically only in Claude Code. In Codex, Cursor, Copilot and
+  Gemini `work.sh status` says what the next stage runs on, and you start it that way.
 - Costs are counted for Claude Code only, from the tasks run with this version of the kit
   on. The main session's share is an estimate: its replies inside the task's time window, so two
   tasks of one session at the same time share replies.

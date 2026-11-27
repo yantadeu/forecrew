@@ -2,11 +2,14 @@
 
 ## Unreleased
 
-- A model per stage, per lane. `models` in `flow.json` maps each lane to the model of each stage
-  (`"*"` for the rest); the hook sets it on the Agent call of every stage it lets start. New
-  installs: Full on Opus; Light on Sonnet except the refiner and the security reviewer; None on
-  Sonnet except the security reviewer. A `Model:` line in `00-purpose.md` wins for the task.
-  `work.sh status` prints the routed stages. Without `models`, each agent keeps its own.
+- A model per stage, per lane, in every tool. `models` in `flow.json` maps each lane to a tier
+  per stage (`fast`, `standard`, `deep`; `"*"` for the rest), and `tiers` says what a tier is in
+  each tool: a Claude alias, a Codex reasoning effort, a model name for Cursor, Copilot and
+  Gemini. In Claude Code the hook sets the model on the Agent call of every stage it lets start;
+  elsewhere `work.sh status` prints, under the next stage, the `codex` or `gemini` command or the
+  model to pick. New installs: Full deep; Light standard except the refiner and the security
+  reviewer; None standard except the security reviewer. A `Model:` line in `00-purpose.md` (tier
+  or Claude alias) wins for the task. Without `models`, each agent keeps its own.
 - Quality next to cost. `GET /api/usage` carries each task's lane, models, executor model, fix
   rounds, stages sent back, refused launches, findings fixed and delivery; the Costs tab groups
   them by lane and executor model with cost per delivered task, and marks groups under three

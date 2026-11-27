@@ -469,14 +469,23 @@ def ready(flow, wid, target):
     return None
 
 
-# What the Agent tool takes as "model". The agent's own frontmatter is the default.
-MODELS = ("haiku", "sonnet", "opus", "fable")
+# A stage runs on a tier, not a vendor's model: "models" in flow.json maps each lane to
+# {stage: fast|standard|deep, "*": ...}, and "tiers" says what each tier is in each tool. Claude Code
+# gets it on the Agent call (the hook); the other tools get it from `work.sh status`, which names
+# the model or prints the command for the next stage. A Claude alias (haiku, sonnet, opus, fable)
+# is still read, as the tier it stands for.
+TIERS = ("fast", "standard", "deep")
+MODELS = ("haiku", "sonnet", "opus", "fable")  # what the Agent tool takes as "model"
+ALIAS_TIER = {"haiku": "fast", "sonnet": "standard", "opus": "deep", "fable": "deep"}
+DEFAULT_TIERS = {"claude": {"fast": "haiku", "standard": "sonnet", "deep": "opus"},
+                 # Codex: the reasoning effort, which does not change name with each new model.
+                 "codex": {"fast": "low", "standard": "medium", "deep": "high"}}
+OTHER_TOOLS = ("codex", "cursor", "copilot", "gemini")
 
 
-def stage_model(flow, wid, target):
-    """The model a stage runs on, or None for its frontmatter's. A `Model: <name>` line in
-    00-purpose.md (the dev's call for this task) wins over "models" in flow.json, which maps each
-    lane to {stage: model}, "*" for every stage the lane does not name."""
+def stage_tier(flow, wid, target):
+    """(what the task or the lane asks for this stage, as written: a tier or a Claude alias), or
+    None. A `Model: <tier|alias>` line in 00-purpose.md (the dev's call for this task) wins."""
     text, _, lane = purpose(flow, wid)
     forced = re.search(r"^Model:\s*(\S+)", text or "", re.M | re.I)
     table = (flow.get("models") or {}).get(lane) if isinstance(flow.get("models"), dict) else None
@@ -484,10 +493,69 @@ def stage_model(flow, wid, target):
     pick = forced.group(1) if forced else table.get(target) or table.get("*")
     if not pick:
         return None
-    if str(pick).lower() not in MODELS:
-        print(f"forecrew: model {pick!r} for {target} is not one of {', '.join(MODELS)}; using the agent's own.", file=sys.stderr)
+    pick = str(pick).lower()
+    if pick not in TIERS and pick not in MODELS:
+        print(f"forecrew: model {pick!r} for {target} is not a tier ({', '.join(TIERS)}) nor one of "
+              f"{', '.join(MODELS)}; using the agent's own.", file=sys.stderr)
         return None
-    return str(pick).lower()
+    return pick
+
+
+def tier_in(flow, pick, tool):
+    """What `pick` is in `tool`: a model alias for claude, an effort for codex, a model name for
+    the others; None when the tool has no value for that tier."""
+    if pick is None:
+        return None
+    if tool == "claude" and pick in MODELS:
+        return pick
+    tier = pick if pick in TIERS else ALIAS_TIER.get(pick)
+    table = (flow.get("tiers") or {}).get(tool) if isinstance(flow.get("tiers"), dict) else None
+    value = (table if isinstance(table, dict) else {}).get(tier) or DEFAULT_TIERS.get(tool, {}).get(tier)
+    if not value or not re.fullmatch(r"[A-Za-z0-9._:/-]{1,80}", str(value)):
+        return None
+    if tool == "claude" and value not in MODELS:
+        print(f"forecrew: tiers.claude.{tier} = {value!r} is not one of {', '.join(MODELS)}; using the agent's own.", file=sys.stderr)
+        return None
+    return str(value)
+
+
+def stage_model(flow, wid, target):
+    """The model alias a stage runs on in Claude Code, or None for its frontmatter's."""
+    return tier_in(flow, stage_tier(flow, wid, target), "claude")
+
+
+def found_tools(flow):
+    """The other tools this repository was exported for (export.py), plus gemini once its tiers are
+    set: the ones `work.sh status` gives the next stage's model to."""
+    found = set()
+    if os.path.exists(os.path.join(ROOT, ".cursor", "rules", "task.mdc")):
+        found.add("cursor")
+    if "agent-flow-kit:begin" in (read(os.path.join(ROOT, "AGENTS.md")) or ""):
+        found.add("codex")
+    if os.path.exists(os.path.join(ROOT, ".github", "prompts", "task.prompt.md")):
+        found.add("copilot")
+    tiers = flow.get("tiers") if isinstance(flow.get("tiers"), dict) else {}
+    if tiers.get("gemini"):
+        found.add("gemini")
+    return [t for t in OTHER_TOOLS if t in found]
+
+
+def next_hints(flow, wid, target):
+    """For the next stage, one line per other tool: how to run it on its tier there."""
+    pick = stage_tier(flow, wid, target)
+    if pick is None:
+        return []
+    ask = f"Act as .claude/agents/{target}.md. Work dir {os.path.basename(work_dir(flow))}/{wid}."
+    out = []
+    for tool in found_tools(flow):
+        v = tier_in(flow, pick, tool)
+        if not v:
+            continue
+        out.append({"codex": f'codex: codex -c model_reasoning_effort={v} "{ask}"',
+                    "gemini": f'gemini: gemini -m {v} -i "{ask}"',
+                    "cursor": f"cursor: a new chat on {v}, with @agent-{target} and the work dir",
+                    "copilot": f"copilot: a new chat on {v}, with the {target} agent and the work dir"}[tool])
+    return out
 
 
 def events(flow):
@@ -503,7 +571,8 @@ def events(flow):
 
 def status(flow, wid):
     bad, shown_next = False, False
-    routed = [f"{a} {m}" for a in flow["stages"] if (m := stage_model(flow, wid, a))]
+    routed = [f"{a} {t}" + (f" ({m})" if (m := stage_model(flow, wid, a)) else "")
+              for a in flow["stages"] if (t := stage_tier(flow, wid, a))]
     if routed:
         rest = " (the rest: their agent file)" if len(routed) < len(flow["stages"]) else ""
         print(f"  models   {', '.join(routed)}{rest}")
@@ -520,6 +589,11 @@ def status(flow, wid):
                 why = ready(flow, wid, agent)
                 line += f"   <- next{': blocked, ' + why if why else ''}"
                 shown_next = True
+                hints = [] if why else next_hints(flow, wid, agent)
+                print(line)
+                for h in hints:
+                    print(f"           {h}")
+                continue
             print(line)
             continue
         reason = gate(flow, wid, agent)
