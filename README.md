@@ -390,6 +390,7 @@ orchestrator routes on that line, not on prose.
 | One review package | Reviewers reading different versions of the change | The same diff, new files included, for all four |
 | Checks run by the machine | Reviewers spending a round on a change that does not build, or trusting "tests pass" from the agent that wrote them | Lint, build and tests run on the exact code, the output in `checks.md` for every lens |
 | Four parallel reviewers | Security, QA and product reviewed last, by the same agent that checked the logic | Four clean contexts, each owning one concern, in the time of one review |
+| Severity by what a merge ships | Every finding "critical", the real one lost among debug-only paths and test fixtures | Each finding re-traced to production and graded by what it gives; the security lens also reads past security fixes of the files it reviews (`git log`) |
 | Product reviewer re-reading sources | Work delivered against a spec that changed mid-task | What changed since the contract, quoted |
 | Bounded fix loop | Agents looping on a finding they cannot resolve | At most three rounds, then the decision is yours |
 | Ledger of rulings | Decisions you never saw | Every decision taken without asking, with its cost if wrong |
@@ -914,7 +915,8 @@ second-opinion.md (with the second-opinion reviewer)
 
 The tests above check the scripts. Evals check the agents: does the refiner still mark an open
 choice when the prompt says "this is urgent"? Does the QA reviewer fail a test that cannot catch
-anything, when told the review is a formality?
+anything, when told the review is a formality? Does the security reviewer keep a debug-only route
+out of `critical` when told everything at a bank is critical?
 
 ```bash
 python3 .claude/kit/evals/run.py --runs 5              # every case, five times
